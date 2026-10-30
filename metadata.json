@@ -1,0 +1,6 @@
+{
+  "name": "Garage OS",
+  "description": "Vehicle Ownership, Automotive Service, Mobility Safety and Vehicle Intelligence Operating System.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
