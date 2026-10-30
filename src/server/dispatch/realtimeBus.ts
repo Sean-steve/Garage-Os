@@ -1,15 +1,23 @@
 /**
- * Garage OS — Sprint 14: Real-Time Event Bus & WebSocket/SSE Infrastructure (GAR-016)
- * Server-authoritative real-time streaming for dispatch, location, and operations.
+ * Garage OS — Sprint 14 Real-Time Event Bus (GAR-016)
+ *
+ * Security rules:
+ * - Identity is derived from a canonical session, never query-supplied user/role IDs.
+ * - Every topic subscription is authorized server-side.
+ * - Topic authorization is re-evaluated when events are published so expired
+ *   tracking contexts stop receiving sensitive updates.
  */
 
 import { WebSocketServer, WebSocket } from 'ws';
-import { Server as HttpServer } from 'http';
+import { Server as HttpServer, IncomingMessage } from 'http';
 import { Response } from 'express';
 import { getCurrentUtcIsoString } from '../domain/time';
 import { logger } from '../observability/logger';
+import { authService } from '../identity/authService';
+import { AuthenticatedActorContext } from '../identity/types';
+import { assertRealtimeTopicAccess } from './dispatchAuthorization';
 
-export interface DispatchRealtimeEvent<T = any> {
+export interface DispatchRealtimeEvent<T = unknown> {
   topic: string;
   sequence: number;
   event: string;
@@ -21,9 +29,26 @@ export interface ClientSubscription {
   socket?: WebSocket;
   sseResponse?: Response;
   topics: Set<string>;
-  userId?: string;
-  role?: string;
-  providerId?: string;
+  actor: AuthenticatedActorContext;
+  sessionToken?: string;
+  organizationId?: string;
+}
+
+function sessionTokenFromRequest(req: IncomingMessage): {
+  token?: string;
+  organizationId?: string;
+  initialTopic?: string;
+} {
+  const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
+  const authHeader = req.headers.authorization;
+  const headerToken =
+    authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : undefined;
+
+  return {
+    token: headerToken || url.searchParams.get('sessionToken') || url.searchParams.get('token') || undefined,
+    organizationId: url.searchParams.get('organizationId') || undefined,
+    initialTopic: url.searchParams.get('topic') || undefined,
+  };
 }
 
 export class RealtimeBus {
@@ -32,10 +57,7 @@ export class RealtimeBus {
   private sseClients = new Map<string, ClientSubscription>();
   private sequenceCounter = 0;
 
-  /**
-   * Initializes the WebSocket server attached to the existing HTTP server
-   */
-  init(server: HttpServer) {
+  init(server: HttpServer): void {
     if (this.wss) return;
 
     this.wss = new WebSocketServer({
@@ -43,107 +65,148 @@ export class RealtimeBus {
       path: '/api/v1/dispatch/ws',
     });
 
-    this.wss.on('connection', (socket: WebSocket, req) => {
-      const url = new URL(req.url || '', `http://${req.headers.host}`);
-      const userId = url.searchParams.get('userId') || undefined;
-      const role = url.searchParams.get('role') || 'CUSTOMER';
-      const providerId = url.searchParams.get('providerId') || undefined;
-      const initialTopic = url.searchParams.get('topic');
-
-      const subscription: ClientSubscription = {
-        socket,
-        topics: new Set<string>(),
-        userId,
-        role,
-        providerId,
-      };
-
-      if (initialTopic) {
-        subscription.topics.add(initialTopic);
-      }
-
-      this.wsClients.set(socket, subscription);
-      logger.info(`WebSocket client connected: userId=${userId}, role=${role}`);
-
-      // Send greeting & initial connection state
-      socket.send(
-        JSON.stringify({
-          topic: 'system',
-          sequence: ++this.sequenceCounter,
-          event: 'CONNECTED',
-          data: { connected: true, timestamp: getCurrentUtcIsoString() },
-          timestamp: getCurrentUtcIsoString(),
-        })
-      );
-
-      socket.on('message', (message: string) => {
-        try {
-          const parsed = JSON.parse(message.toString());
-          if (parsed.action === 'SUBSCRIBE' && parsed.topic) {
-            subscription.topics.add(parsed.topic);
-            socket.send(
-              JSON.stringify({
-                topic: parsed.topic,
-                sequence: ++this.sequenceCounter,
-                event: 'SUBSCRIBED',
-                data: { topic: parsed.topic },
-                timestamp: getCurrentUtcIsoString(),
-              })
-            );
-          } else if (parsed.action === 'UNSUBSCRIBE' && parsed.topic) {
-            subscription.topics.delete(parsed.topic);
-          } else if (parsed.action === 'PING') {
-            socket.send(JSON.stringify({ action: 'PONG', timestamp: getCurrentUtcIsoString() }));
-          }
-        } catch (err) {
-          logger.warn(`Failed to parse WebSocket message: ${err}`);
+    this.wss.on('connection', (socket: WebSocket, req: IncomingMessage) => {
+      try {
+        const { token, organizationId, initialTopic } = sessionTokenFromRequest(req);
+        if (!token) {
+          socket.close(4401, 'Authentication required');
+          return;
         }
-      });
 
-      socket.on('close', () => {
-        this.wsClients.delete(socket);
-        logger.info(`WebSocket client disconnected: userId=${userId}`);
-      });
+        const actor = authService.authenticateSession(token, organizationId);
+        if (!actor) {
+          socket.close(4401, 'Invalid or expired session');
+          return;
+        }
 
-      socket.on('error', (err) => {
-        logger.warn(`WebSocket error: ${err.message}`);
-        this.wsClients.delete(socket);
-      });
+        const subscription: ClientSubscription = {
+          socket,
+          topics: new Set<string>(),
+          actor,
+          sessionToken: token,
+          organizationId,
+        };
+
+        if (initialTopic) {
+          assertRealtimeTopicAccess(actor, initialTopic);
+          subscription.topics.add(initialTopic);
+        }
+
+        this.wsClients.set(socket, subscription);
+
+        socket.send(
+          JSON.stringify({
+            topic: 'system',
+            sequence: ++this.sequenceCounter,
+            event: 'CONNECTED',
+            data: { connected: true, timestamp: getCurrentUtcIsoString() },
+            timestamp: getCurrentUtcIsoString(),
+          })
+        );
+
+        socket.on('message', (message) => {
+          try {
+            const parsed = JSON.parse(message.toString());
+
+            if (parsed.action === 'SUBSCRIBE' && typeof parsed.topic === 'string') {
+              assertRealtimeTopicAccess(subscription.actor, parsed.topic);
+              subscription.topics.add(parsed.topic);
+              socket.send(
+                JSON.stringify({
+                  topic: parsed.topic,
+                  sequence: ++this.sequenceCounter,
+                  event: 'SUBSCRIBED',
+                  data: { topic: parsed.topic },
+                  timestamp: getCurrentUtcIsoString(),
+                })
+              );
+              return;
+            }
+
+            if (parsed.action === 'UNSUBSCRIBE' && typeof parsed.topic === 'string') {
+              subscription.topics.delete(parsed.topic);
+              return;
+            }
+
+            if (parsed.action === 'PING') {
+              socket.send(
+                JSON.stringify({ action: 'PONG', timestamp: getCurrentUtcIsoString() })
+              );
+            }
+          } catch (err) {
+            logger.warn(`Rejected realtime subscription message: ${err instanceof Error ? err.message : String(err)}`);
+            if (socket.readyState === WebSocket.OPEN) {
+              socket.send(
+                JSON.stringify({
+                  topic: 'system',
+                  sequence: ++this.sequenceCounter,
+                  event: 'SUBSCRIPTION_DENIED',
+                  data: { message: 'Realtime topic is not authorized' },
+                  timestamp: getCurrentUtcIsoString(),
+                })
+              );
+            }
+          }
+        });
+
+        socket.on('close', () => {
+          this.wsClients.delete(socket);
+        });
+
+        socket.on('error', (err) => {
+          logger.warn(`WebSocket error: ${err.message}`);
+          this.wsClients.delete(socket);
+        });
+      } catch (err) {
+        logger.warn(`Realtime authentication failed: ${err instanceof Error ? err.message : String(err)}`);
+        socket.close(4403, 'Realtime access denied');
+      }
     });
 
-    logger.info('Real-Time WebSocket Server initialized on /api/v1/dispatch/ws');
+    logger.info('Authenticated real-time WebSocket server initialized on /api/v1/dispatch/ws');
   }
 
-  /**
-   * Registers a Server-Sent Events (SSE) client
-   */
   registerSseClient(
     clientId: string,
     res: Response,
     topics: string[],
-    userContext?: { userId?: string; role?: string; providerId?: string }
-  ) {
+    actor: AuthenticatedActorContext
+  ): void {
+    for (const topic of topics) {
+      assertRealtimeTopicAccess(actor, topic);
+    }
+
     const subscription: ClientSubscription = {
       sseResponse: res,
       topics: new Set(topics),
-      userId: userContext?.userId,
-      role: userContext?.role,
-      providerId: userContext?.providerId,
+      actor,
     };
 
     this.sseClients.set(clientId, subscription);
-
-    // Initial SSE connected message
-    res.write(`event: connected\ndata: ${JSON.stringify({ connected: true, clientId })}\n\n`);
+    res.write(
+      `event: connected\ndata: ${JSON.stringify({ connected: true, clientId })}\n\n`
+    );
 
     res.on('close', () => {
       this.sseClients.delete(clientId);
     });
   }
 
-  /**
-   * Broadcasts an event to all clients subscribed to the topic (both WebSocket and SSE)
-   */
+  private refreshWsActor(subscription: ClientSubscription): AuthenticatedActorContext | null {
+    if (!subscription.sessionToken) return subscription.actor;
+    try {
+      const actor = authService.authenticateSession(
+        subscription.sessionToken,
+        subscription.organizationId
+      );
+      if (!actor) return null;
+      subscription.actor = actor;
+      return actor;
+    } catch {
+      return null;
+    }
+  }
+
   publish<T>(topic: string, event: string, data: T): DispatchRealtimeEvent<T> {
     const payload: DispatchRealtimeEvent<T> = {
       topic,
@@ -152,27 +215,47 @@ export class RealtimeBus {
       data,
       timestamp: getCurrentUtcIsoString(),
     };
-
     const messageString = JSON.stringify(payload);
 
-    // 1. Deliver to WebSocket subscribers
-    for (const [socket, sub] of this.wsClients.entries()) {
-      if (socket.readyState === WebSocket.OPEN && (sub.topics.has(topic) || sub.topics.has('*'))) {
-        try {
-          socket.send(messageString);
-        } catch (err) {
-          logger.warn(`Error sending WebSocket message: ${err}`);
-        }
+    for (const [socket, subscription] of this.wsClients.entries()) {
+      if (
+        socket.readyState !== WebSocket.OPEN ||
+        (!subscription.topics.has(topic) && !subscription.topics.has('*'))
+      ) {
+        continue;
+      }
+
+      const actor = this.refreshWsActor(subscription);
+      if (!actor) {
+        socket.close(4401, 'Session expired');
+        this.wsClients.delete(socket);
+        continue;
+      }
+
+      try {
+        assertRealtimeTopicAccess(actor, topic);
+        socket.send(messageString);
+      } catch {
+        subscription.topics.delete(topic);
       }
     }
 
-    // 2. Deliver to SSE subscribers
-    for (const [, sub] of this.sseClients.entries()) {
-      if (sub.sseResponse && (sub.topics.has(topic) || sub.topics.has('*'))) {
-        try {
-          sub.sseResponse.write(`event: ${event}\ndata: ${messageString}\n\n`);
-        } catch (err) {
-          // Client disconnected
+    for (const [clientId, subscription] of this.sseClients.entries()) {
+      if (
+        !subscription.sseResponse ||
+        (!subscription.topics.has(topic) && !subscription.topics.has('*'))
+      ) {
+        continue;
+      }
+
+      try {
+        assertRealtimeTopicAccess(subscription.actor, topic);
+        subscription.sseResponse.write(`event: ${event}\ndata: ${messageString}\n\n`);
+      } catch {
+        subscription.topics.delete(topic);
+        if (subscription.topics.size === 0) {
+          subscription.sseResponse.end();
+          this.sseClients.delete(clientId);
         }
       }
     }
