@@ -18,7 +18,7 @@ import { storageEngine } from '../storage/storageEngine';
 import { listAuditEvents, recordAuditEvent } from '../security/audit';
 import { featureFlagManager } from '../featureFlags/flags';
 import { metrics } from '../observability/metrics';
-import { SPRINT_1_TRACEABILITY_MATRIX } from '../../shared/traceability';
+import { SPRINT_1_14_TRACEABILITY_MATRIX } from '../../shared/traceability';
 import { PlatformLifecycleState, CanonicalActorType } from '../../shared/types';
 import { CanonicalAppError, ErrorCode } from '../../shared/errors';
 import { DataProvenanceClass } from '../../shared/provenance';
@@ -161,8 +161,8 @@ apiV1Router.get('/platform/capabilities', (req: Request, res: Response) => {
 // 2. Traceability Matrix (GAR-049 §8 /v1/admin/traceability)
 apiV1Router.get('/admin/traceability', authenticate(), requirePermission(CanonicalPermission.ADMIN_AUDIT_READ), (req: Request, res: Response) => {
   return res.canonicalSuccess({
-    total_requirements: SPRINT_1_TRACEABILITY_MATRIX.length,
-    matrix: SPRINT_1_TRACEABILITY_MATRIX,
+    total_requirements: SPRINT_1_14_TRACEABILITY_MATRIX.length,
+    matrix: SPRINT_1_14_TRACEABILITY_MATRIX,
   });
 });
 
