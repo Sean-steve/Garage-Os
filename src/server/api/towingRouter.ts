@@ -16,6 +16,7 @@ import {
   MembershipStatus,
   OrganizationStatus,
   OrganizationType,
+  PlatformRole,
 } from '../identity/types';
 import {
   TowRequestStatus,
@@ -36,39 +37,67 @@ import {
   TowDeliveryEvidenceType,
   TowFailureType,
 } from '../towing/types';
+import { canAccessProvider, assertProviderAccess } from '../dispatch/dispatchAuthorization';
+import { vehiclePolicy } from '../vehicle/vehiclePolicy';
+import { CanonicalPermission } from '../identity/rbac';
 
 export const towingRouter = Router();
 
 // Middleware: Authenticate actor context (with optional mode for local dev flexibility)
 towingRouter.use(authenticate());
 
-function getActor(req: Request): TowActorContext & { actor_id: string; roles: string[] } {
-  if (req.actor) {
-    const roles: string[] = [];
-    if (req.actor.active_membership?.role) {
-      roles.push(req.actor.active_membership.role);
-    }
-    if (req.actor.platform_roles) {
-      roles.push(...req.actor.platform_roles);
-    }
-    return {
-      id: req.actor.user_id || req.actor.id,
-      actor_id: req.actor.user_id || req.actor.id,
-      name: req.actor.email?.split('@')[0] || 'Authenticated User',
-      roles,
-      provider_id: req.headers['x-provider-id'] as string | undefined,
-    };
+function getActor(req: Request): TowActorContext & AuthenticatedActorContext & { actor_id: string; roles: string[] } {
+  if (!req.actor) {
+    throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Authentication required', 401);
   }
 
-  // Fallback dev context
-  const providerIdHeader = req.headers['x-provider-id'] as string | undefined;
+  const roles: string[] = [];
+  if (req.actor.active_membership?.role) roles.push(req.actor.active_membership.role);
+  if (req.actor.platform_roles) roles.push(...req.actor.platform_roles);
+
   return {
-    id: providerIdHeader ? `usr_operator_${providerIdHeader}` : 'usr_dev_driver_01',
-    actor_id: providerIdHeader ? `usr_operator_${providerIdHeader}` : 'usr_dev_driver_01',
-    name: providerIdHeader ? 'Tow Operator' : 'Vehicle Owner',
-    roles: providerIdHeader ? ['TOW_OPERATOR', 'PROVIDER_STAFF'] : ['OWNER'],
-    provider_id: providerIdHeader,
+    ...req.actor,
+    id: req.actor.user_id || req.actor.id,
+    actor_id: req.actor.user_id || req.actor.id,
+    name: req.actor.profile.display_name,
+    roles,
+    provider_id: req.headers['x-provider-id'] as string | undefined,
   };
+}
+
+function isPrivilegedTowingActor(actor: AuthenticatedActorContext): boolean {
+  return actor.platform_roles.some((role) =>
+    [
+      PlatformRole.PLATFORM_ADMIN,
+      PlatformRole.OPERATIONS,
+      PlatformRole.TRUST_AND_SAFETY,
+      PlatformRole.SUPPORT_AGENT,
+    ].includes(role)
+  );
+}
+
+function assertTowRequestOwnerAccess(actor: AuthenticatedActorContext, requestId: string): void {
+  const request = towingRepository.getTowRequestById(requestId);
+  if (!request) {
+    throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, 'Tow request not found', 404);
+  }
+  if (request.requesting_user_id === actor.id || isPrivilegedTowingActor(actor)) return;
+  throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Tow request access denied', 403);
+}
+
+function assertTowRequestReadAccess(actor: AuthenticatedActorContext, requestId: string): void {
+  const request = towingRepository.getTowRequestById(requestId);
+  if (!request) {
+    throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, 'Tow request not found', 404);
+  }
+  if (request.requesting_user_id === actor.id || isPrivilegedTowingActor(actor)) return;
+
+  if (request.assigned_provider_id && canAccessProvider(actor, request.assigned_provider_id)) return;
+
+  const offers = towingRepository.listOffersByRequestId(requestId);
+  if (offers.some((offer) => canAccessProvider(actor, offer.provider_id))) return;
+
+  throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Tow request access denied', 403);
 }
 
 // -----------------------------------------------------------------------------
