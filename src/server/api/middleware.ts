@@ -4,11 +4,11 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { CanonicalAppError, ErrorCode } from '../../shared/errors';
-import { ResponseEnvelope, ApiErrorEnvelope, CanonicalActorType } from '../../shared/types';
+import { ResponseEnvelope, ApiErrorEnvelope } from '../../shared/types';
 import { getCurrentUtcIsoString } from '../domain/time';
 import { logger } from '../observability/logger';
 import { metrics } from '../observability/metrics';
-import { AuthenticatedActorContext, AccountStatus } from '../identity/types';
+import { AuthenticatedActorContext } from '../identity/types';
 
 declare global {
   namespace Express {
@@ -53,60 +53,13 @@ export function canonicalEnvelopeMiddleware(req: Request, res: Response, next: N
 }
 
 /**
- * Authentication Hook Placeholder (GAR-003, Full auth in Sprint 2)
+ * Legacy authentication hook retained as a no-op for middleware compatibility.
+ *
+ * Authentication is performed only by the canonical authenticate() middleware
+ * on protected routes. In particular, X-Actor-* headers and arbitrary
+ * Authorization header presence never create an authenticated actor.
  */
-export function authContextMiddleware(req: Request, res: Response, next: NextFunction): void {
-  const authHeader = req.headers['authorization'];
-  const actorRoleHeader = req.headers['x-actor-role'] as string;
-  const actorIdHeader = req.headers['x-actor-id'] as string;
-
-  if (actorIdHeader && actorRoleHeader) {
-    req.actor = {
-      id: actorIdHeader,
-      user_id: actorIdHeader,
-      type: (actorRoleHeader as CanonicalActorType) || CanonicalActorType.VEHICLE_OWNER,
-      roles: [actorRoleHeader],
-      email: `${actorIdHeader}@garageos.test`,
-      account_status: AccountStatus.ACTIVE,
-      profile: {
-        user_id: actorIdHeader,
-        display_name: actorIdHeader,
-        preferred_language: 'en',
-        timezone: 'UTC',
-        country: 'KE',
-        created_at: getCurrentUtcIsoString(),
-        updated_at: getCurrentUtcIsoString(),
-      },
-      platform_roles: [],
-      memberships: [],
-      session_id: `ses_legacy_${actorIdHeader}`,
-    };
-    req.actorId = actorIdHeader;
-  } else if (authHeader) {
-    // Basic dev session mock hook for foundation
-    req.actor = {
-      id: 'usr_foundation_demo',
-      user_id: 'usr_foundation_demo',
-      type: CanonicalActorType.VEHICLE_OWNER,
-      roles: ['VEHICLE_OWNER'],
-      email: 'demo@garageos.test',
-      account_status: AccountStatus.ACTIVE,
-      profile: {
-        user_id: 'usr_foundation_demo',
-        display_name: 'Demo User',
-        preferred_language: 'en',
-        timezone: 'UTC',
-        country: 'KE',
-        created_at: getCurrentUtcIsoString(),
-        updated_at: getCurrentUtcIsoString(),
-      },
-      platform_roles: [],
-      memberships: [],
-      session_id: 'ses_legacy_demo',
-    };
-    req.actorId = 'usr_foundation_demo';
-  }
-
+export function authContextMiddleware(_req: Request, _res: Response, next: NextFunction): void {
   next();
 }
 
