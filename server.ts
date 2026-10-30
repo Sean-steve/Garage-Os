@@ -153,7 +153,7 @@ async function bootstrapServer() {
 
   // 8. Construct Express App
   const app = express();
-  const PORT = 3000;
+  const PORT = config.PORT;
 
   // Security & standard middlewares
   app.use(securityHeadersMiddleware);
@@ -162,7 +162,7 @@ async function bootstrapServer() {
   app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', config.CORS_ALLOWED_ORIGINS);
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Correlation-Id, Idempotency-Key, X-Actor-Id, X-Actor-Role, X-Organization-Id, X-Session-Token');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Correlation-Id, Idempotency-Key, X-Organization-Id, X-Session-Token');
     if (req.method === 'OPTIONS') {
       return res.sendStatus(204);
     }
@@ -215,7 +215,7 @@ async function bootstrapServer() {
     });
   }
 
-  // Bind to 0.0.0.0 and PORT 3000
+  // Bind to 0.0.0.0 using validated PORT configuration
   const server = app.listen(PORT, '0.0.0.0', () => {
     logger.info(`Garage OS Canonical Platform online and listening on http://0.0.0.0:${PORT}`);
   });
