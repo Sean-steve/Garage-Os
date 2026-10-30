@@ -16,8 +16,12 @@ import {
   ResponderAvailabilityStatus,
   LocationSourceType,
 } from './types';
+import { authenticate } from '../api/authMiddleware';
 
 export const dispatchRouter = Router();
+
+// Dispatch APIs are protected by canonical session authentication.
+dispatchRouter.use(authenticate());
 
 /**
  * 1. Update responder presence and heartbeat
