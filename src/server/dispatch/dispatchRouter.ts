@@ -291,13 +291,12 @@ dispatchRouter.post('/requests/:id/reassign', async (req: Request, res: Response
  */
 dispatchRouter.get('/tracking/:assignmentId', async (req: Request, res: Response) => {
   try {
-    const requesterUserId = (req.query.userId as string) || 'customer_demo';
-    const requesterRole = (req.query.role as string) || 'CUSTOMER';
+    assertTrackingAccess(req.actor!, req.params.assignmentId);
 
     const trackingView = dispatchService.getTrackingView({
       assignmentId: req.params.assignmentId,
-      requesterUserId,
-      requesterRole,
+      requesterUserId: req.actor!.id,
+      requesterRole: req.actor!.platform_roles[0] || req.actor!.roles?.[0] || 'CUSTOMER',
     });
 
     res.json({ success: true, data: trackingView });
@@ -311,6 +310,7 @@ dispatchRouter.get('/tracking/:assignmentId', async (req: Request, res: Response
  */
 dispatchRouter.get('/operations/overview', async (req: Request, res: Response) => {
   try {
+    assertOperationsAccess(req.actor!);
     const overview = dispatchRepository.getOperationsOverview();
     res.json({ success: true, data: overview });
   } catch (err: any) {
@@ -328,11 +328,15 @@ dispatchRouter.get('/events', (req: Request, res: Response) => {
   res.flushHeaders?.();
 
   const clientId = `sse_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-  const topicsParam = (req.query.topics as string) || '*';
-  const topics = topicsParam.split(',').map((t) => t.trim());
+  const topicsParam = (req.query.topics as string) || '';
+  const topics = topicsParam
+    .split(',')
+    .map((t) => t.trim())
+    .filter(Boolean);
 
-  realtimeBus.registerSseClient(clientId, res, topics, {
-    userId: req.query.userId as string,
-    role: req.query.role as string,
-  });
+  if (topics.length === 0) {
+    return res.status(400).json({ error: 'At least one authorized topic is required' });
+  }
+
+  realtimeBus.registerSseClient(clientId, res, topics, req.actor!);
 });
