@@ -97,12 +97,12 @@ apiV1Router.get('/platform/capabilities', (req: Request, res: Response) => {
 
   const capabilities = {
     platform_name: 'Garage OS',
-    version: '8.0.0-sprint8',
-    environment: process.env.NODE_ENV || 'development',
+    version: '14.1.0-r1',
+    environment: config.APP_ENV,
     lifecycle_state: PlatformLifecycleState.ACTIVE,
     architecture_baseline: 'GAR-000-to-GAR-051',
-    active_sprint: 'Sprint 8: Tyres, Parts, Components & Vehicle Configuration Architecture (GAR-010)',
-    next_sprint: 'Sprint 9: Garage & Automotive Service Provider Domain Architecture (GAR-011)',
+    active_sprint: 'Phase R1: Sprint 1–14 Repository Reconciliation & Certification',
+    next_sprint: 'Sprint 15: Emergency Circle & Human Safety Foundation (GAR-017)',
     constitutional_laws_enforced: 12,
     config: getSanitizedConfig(),
     domains: [
@@ -114,9 +114,13 @@ apiV1Router.get('/platform/capabilities', (req: Request, res: Response) => {
       { id: 'GAR-008', title: 'Vehicle Issues & Recurrence', status: 'ACTIVE_IMPLEMENTED', owner: 'Diagnostics Domain' },
       { id: 'GAR-009', title: 'Fuel, Expenses & TCO', status: 'ACTIVE_IMPLEMENTED', owner: 'Cost Domain' },
       { id: 'GAR-010', title: 'Tyres & Vehicle Components', status: 'ACTIVE_IMPLEMENTED', owner: 'Components Domain' },
-      { id: 'GAR-011', title: 'Garage & Provider Network', status: 'FOUNDATION_READY', owner: 'Provider Domain' },
-      { id: 'GAR-014', title: 'Roadside Assistance', status: 'FOUNDATION_READY', owner: 'Roadside Domain' },
-      { id: 'GAR-017', title: 'SOS & Human Safety Engine', status: 'FOUNDATION_READY', owner: 'Safety Domain' },
+      { id: 'GAR-011', title: 'Garage & Provider Network', status: 'ACTIVE_IMPLEMENTED', owner: 'Provider Domain' },
+      { id: 'GAR-012', title: 'Garage Operations Management', status: 'ACTIVE_IMPLEMENTED', owner: 'Garage Operations Domain' },
+      { id: 'GAR-013', title: 'Booking, Scheduling & Quotes', status: 'ACTIVE_IMPLEMENTED', owner: 'Service Transaction Domain' },
+      { id: 'GAR-014', title: 'Roadside Assistance', status: 'ACTIVE_IMPLEMENTED', owner: 'Roadside Domain' },
+      { id: 'GAR-015', title: 'Towing & Recovery', status: 'ACTIVE_IMPLEMENTED', owner: 'Towing Domain' },
+      { id: 'GAR-016', title: 'Real-Time Dispatch & Matching', status: 'R1_SECURITY_RECONCILED', owner: 'Dispatch Domain' },
+      { id: 'GAR-017', title: 'SOS & Human Safety Engine', status: 'NOT_STARTED', owner: 'Safety Domain' },
     ],
     subsystems: {
       database: {
