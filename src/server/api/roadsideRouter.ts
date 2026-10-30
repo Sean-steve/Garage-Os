@@ -285,6 +285,11 @@ roadsideRouter.get('/incidents/:id/activity', (req: Request, res: Response, next
 roadsideRouter.post('/offers/:id/respond', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    const providerOffer = roadsideRepository.getProviderOfferById(req.params.id);
+    if (!providerOffer) {
+      throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, 'Roadside provider offer not found', 404);
+    }
+    assertProviderAccess(actor, providerOffer.provider_id);
     const { accept, decline_reason, eta_minutes, callout_charge_minor, assigned_technician_name, assigned_technician_phone, assigned_vehicle_reg } = req.body;
 
     if (accept === undefined) {
@@ -316,6 +321,8 @@ roadsideRouter.post('/offers/:id/respond', async (req: Request, res: Response, n
  */
 roadsideRouter.get('/providers/:providerId/offers', (req: Request, res: Response, next: NextFunction) => {
   try {
+    const actor = getActor(req);
+    assertProviderAccess(actor, req.params.providerId);
     const status = req.query.status as ProviderOfferStatus | undefined;
     const offers = roadsideService.getProviderOffers(req.params.providerId, status);
     res.json({ success: true, count: offers.length, data: offers });
@@ -329,6 +336,8 @@ roadsideRouter.get('/providers/:providerId/offers', (req: Request, res: Response
  */
 roadsideRouter.get('/providers/:providerId/assignments', (req: Request, res: Response, next: NextFunction) => {
   try {
+    const actor = getActor(req);
+    assertProviderAccess(actor, req.params.providerId);
     const status = req.query.status as AssignmentStatus | undefined;
     const assignments = roadsideService.getProviderAssignments(req.params.providerId, status);
     res.json({ success: true, count: assignments.length, data: assignments });
@@ -343,6 +352,11 @@ roadsideRouter.get('/providers/:providerId/assignments', (req: Request, res: Res
 roadsideRouter.patch('/assignments/:id/status', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    const assignment = roadsideRepository.getAssignmentById(req.params.id);
+    if (!assignment) {
+      throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, 'Roadside assignment not found', 404);
+    }
+    assertProviderAccess(actor, assignment.provider_id);
     const { status, latitude, longitude, eta_minutes, assigned_technician_name, assigned_technician_phone, assigned_vehicle_reg } = req.body;
 
     if (!status) {
@@ -375,6 +389,11 @@ roadsideRouter.patch('/assignments/:id/status', async (req: Request, res: Respon
 roadsideRouter.post('/assignments/:id/interventions', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    const assignment = roadsideRepository.getAssignmentById(req.params.id);
+    if (!assignment) {
+      throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, 'Roadside assignment not found', 404);
+    }
+    assertProviderAccess(actor, assignment.provider_id);
     const {
       result,
       summary_notes,
