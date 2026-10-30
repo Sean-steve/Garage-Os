@@ -338,12 +338,13 @@ towingRouter.post('/towing/requests/:id/cancel', async (req: Request, res: Respo
 towingRouter.post('/towing/offers/:id/accept', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
-    const { provider_id, operator_staff_id, operator_name, operator_phone } = req.body;
-
-    const resolvedProviderId = provider_id || actor.provider_id;
-    if (!resolvedProviderId) {
-      throw new CanonicalAppError(ErrorCode.VALIDATION_ERROR, 'provider_id is required to accept offer');
+    const providerOffer = towingRepository.getOfferById(req.params.id);
+    if (!providerOffer) {
+      throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, 'Tow provider offer not found', 404);
     }
+    assertProviderAccess(actor, providerOffer.provider_id);
+    const { operator_staff_id, operator_name, operator_phone } = req.body;
+    const resolvedProviderId = providerOffer.provider_id;
 
     const assignment = await towingService.acceptOffer(
       {
@@ -369,12 +370,13 @@ towingRouter.post('/towing/offers/:id/accept', async (req: Request, res: Respons
 towingRouter.post('/towing/offers/:id/decline', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
-    const { provider_id, reason } = req.body;
-
-    const resolvedProviderId = provider_id || actor.provider_id;
-    if (!resolvedProviderId) {
-      throw new CanonicalAppError(ErrorCode.VALIDATION_ERROR, 'provider_id is required to decline offer');
+    const providerOffer = towingRepository.getOfferById(req.params.id);
+    if (!providerOffer) {
+      throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, 'Tow provider offer not found', 404);
     }
+    assertProviderAccess(actor, providerOffer.provider_id);
+    const { reason } = req.body;
+    const resolvedProviderId = providerOffer.provider_id;
 
     await towingService.declineOffer(req.params.id, resolvedProviderId, reason);
     res.json({ success: true, message: 'Offer declined' });
