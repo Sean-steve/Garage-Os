@@ -22,12 +22,14 @@ import {
   MembershipStatus,
   OrganizationStatus,
   OrganizationType,
+  PlatformRole,
 } from '../identity/types';
 import {
   RoadsideIncidentStatus,
   AssignmentStatus,
   ProviderOfferStatus,
 } from '../roadside/types';
+import { canAccessProvider, assertProviderAccess } from '../dispatch/dispatchAuthorization';
 
 export const roadsideRouter = Router();
 
@@ -35,65 +37,57 @@ export const roadsideRouter = Router();
 roadsideRouter.use(authenticate());
 
 function getActor(req: Request): AuthenticatedActorContext & { actor_id: string; roles: string[] } {
-  if (req.actor) {
-    const roles: string[] = [];
-    if (req.actor.active_membership?.role) {
-      roles.push(req.actor.active_membership.role);
-    }
-    if (req.actor.platform_roles) {
-      roles.push(...req.actor.platform_roles);
-    }
-    return {
-      ...req.actor,
-      actor_id: req.actor.user_id || req.actor.id,
-      roles,
-    };
+  if (!req.actor) {
+    throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Authentication required', 401);
   }
 
-  // Fallback dev context
+  const roles: string[] = [];
+  if (req.actor.active_membership?.role) roles.push(req.actor.active_membership.role);
+  if (req.actor.platform_roles) roles.push(...req.actor.platform_roles);
+
   return {
-    id: 'usr_dev_driver_01',
-    user_id: 'usr_dev_driver_01',
-    actor_id: 'usr_dev_driver_01',
-    session_id: 'sess_dev_driver_01',
-    email: 'driver@garage-os.local',
-    account_status: AccountStatus.ACTIVE,
-    platform_roles: [],
-    profile: {
-      user_id: 'usr_dev_driver_01',
-      display_name: 'Dev Stranded Driver',
-      first_name: 'Dev',
-      last_name: 'Driver',
-      preferred_language: 'en',
-      timezone: 'Africa/Nairobi',
-      country: 'KE',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    memberships: [
-      {
-        membership_id: 'mem_dev_driver_01',
-        organization_id: 'org_dev_driver_01',
-        organization_name: 'Driver Fleet',
-        organization_type: OrganizationType.GARAGE,
-        organization_status: OrganizationStatus.ACTIVE,
-        role: MembershipRole.OWNER,
-        status: MembershipStatus.ACTIVE,
-      },
-    ],
-    active_organization_id: 'org_dev_driver_01',
-    active_membership: {
-      membership_id: 'mem_dev_driver_01',
-      organization_id: 'org_dev_driver_01',
-      organization_name: 'Driver Fleet',
-      organization_type: OrganizationType.GARAGE,
-      organization_status: OrganizationStatus.ACTIVE,
-      role: MembershipRole.OWNER,
-      status: MembershipStatus.ACTIVE,
-      permissions: [],
-    },
-    roles: [MembershipRole.OWNER],
+    ...req.actor,
+    actor_id: req.actor.user_id || req.actor.id,
+    roles,
   };
+}
+
+function isPrivilegedRoadsideActor(actor: AuthenticatedActorContext): boolean {
+  return actor.platform_roles.some((role) =>
+    [
+      PlatformRole.PLATFORM_ADMIN,
+      PlatformRole.OPERATIONS,
+      PlatformRole.TRUST_AND_SAFETY,
+      PlatformRole.SUPPORT_AGENT,
+    ].includes(role)
+  );
+}
+
+function assertIncidentOwnerAccess(actor: AuthenticatedActorContext, incidentId: string): void {
+  const incident = roadsideRepository.getIncidentById(incidentId);
+  if (!incident) {
+    throw new CanonicalAppError(ErrorCode.ROADSIDE_INCIDENT_NOT_FOUND, 'Roadside incident not found', 404);
+  }
+  if (incident.reported_by_user_id === actor.id || isPrivilegedRoadsideActor(actor)) return;
+  throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Roadside incident access denied', 403);
+}
+
+function assertIncidentReadAccess(actor: AuthenticatedActorContext, incidentId: string): void {
+  const incident = roadsideRepository.getIncidentById(incidentId);
+  if (!incident) {
+    throw new CanonicalAppError(ErrorCode.ROADSIDE_INCIDENT_NOT_FOUND, 'Roadside incident not found', 404);
+  }
+  if (incident.reported_by_user_id === actor.id || isPrivilegedRoadsideActor(actor)) return;
+
+  if (incident.active_assignment_id) {
+    const assignment = roadsideRepository.getAssignmentById(incident.active_assignment_id);
+    if (assignment && canAccessProvider(actor, assignment.provider_id)) return;
+  }
+
+  const offers = roadsideRepository.getOffersByIncidentId(incidentId);
+  if (offers.some((offer) => canAccessProvider(actor, offer.provider_id))) return;
+
+  throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Roadside incident access denied', 403);
 }
 
 // ===========================================================================
