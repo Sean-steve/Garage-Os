@@ -17,6 +17,15 @@ import {
   LocationSourceType,
 } from './types';
 import { authenticate } from '../api/authMiddleware';
+import { CanonicalAppError, ErrorCode } from '../../shared/errors';
+import {
+  assertDispatchRequestAccess,
+  assertDispatchSourceAccess,
+  assertOperationsAccess,
+  assertProviderAccess,
+  assertResponderAccess,
+  assertTrackingAccess,
+} from './dispatchAuthorization';
 
 export const dispatchRouter = Router();
 
