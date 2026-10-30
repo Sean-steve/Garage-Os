@@ -270,11 +270,21 @@ apiV1Router.get('/files/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
   const token = req.query.token as string | undefined;
 
-  if (token) {
-    const verified = storageEngine.verifySignedAccessToken(token);
-    if (!verified.valid || verified.fileId !== id) {
-      throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Invalid or expired signed access token', 403);
-    }
+  if (!token) {
+    throw new CanonicalAppError(
+      ErrorCode.NOT_AUTHORIZED,
+      'A signed access token is required for file retrieval',
+      401
+    );
+  }
+
+  const verified = storageEngine.verifySignedAccessToken(token);
+  if (!verified.valid || verified.fileId !== id) {
+    throw new CanonicalAppError(
+      ErrorCode.NOT_AUTHORIZED,
+      'Invalid or expired signed access token',
+      403
+    );
   }
 
   const file = await storageEngine.getFile(id);
