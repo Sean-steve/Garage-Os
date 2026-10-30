@@ -154,6 +154,8 @@ dispatchRouter.post('/requests', async (req: Request, res: Response) => {
       strategy,
     } = req.body;
 
+    assertDispatchSourceAccess(req.actor!, dispatch_domain as DispatchDomain, source_reference_id);
+
     const result = await dispatchService.createRequest({
       dispatch_domain: dispatch_domain as DispatchDomain,
       source_reference_type,
@@ -179,6 +181,7 @@ dispatchRouter.post('/requests', async (req: Request, res: Response) => {
  */
 dispatchRouter.get('/requests/:id', async (req: Request, res: Response) => {
   try {
+    assertDispatchRequestAccess(req.actor!, req.params.id);
     const request = dispatchRepository.getRequestById(req.params.id);
     if (!request) {
       return res.status(404).json({ error: 'Dispatch request not found' });
