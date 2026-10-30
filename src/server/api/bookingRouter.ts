@@ -28,7 +28,7 @@ import { BookingStatus, QuoteStatus } from '../booking/types';
 export const bookingRouter = Router();
 
 // Middleware: Authenticate actor context (populates req.actor)
-bookingRouter.use(authenticate({ optional: true }));
+bookingRouter.use(authenticate());
 
 function getActor(req: Request): AuthenticatedActorContext & { actor_id: string; roles: string[] } {
   if (req.actor) {
