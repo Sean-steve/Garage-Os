@@ -136,10 +136,15 @@ roadsideRouter.post('/incidents', async (req: Request, res: Response, next: Next
  */
 roadsideRouter.get('/incidents', (req: Request, res: Response, next: NextFunction) => {
   try {
+    const actor = getActor(req);
     const filters = {
       vehicle_id: req.query.vehicle_id as string | undefined,
-      organization_id: req.query.organization_id as string | undefined,
-      reported_by_user_id: req.query.reported_by_user_id as string | undefined,
+      organization_id: isPrivilegedRoadsideActor(actor)
+        ? (req.query.organization_id as string | undefined)
+        : undefined,
+      reported_by_user_id: isPrivilegedRoadsideActor(actor)
+        ? (req.query.reported_by_user_id as string | undefined)
+        : actor.id,
       status: req.query.status as RoadsideIncidentStatus | undefined,
       limit: req.query.limit ? parseInt(req.query.limit as string, 10) : undefined,
       offset: req.query.offset ? parseInt(req.query.offset as string, 10) : undefined,
@@ -157,6 +162,8 @@ roadsideRouter.get('/incidents', (req: Request, res: Response, next: NextFunctio
  */
 roadsideRouter.get('/incidents/:id', (req: Request, res: Response, next: NextFunction) => {
   try {
+    const actor = getActor(req);
+    assertIncidentReadAccess(actor, req.params.id);
     const aggregate = roadsideService.getIncidentDetails(req.params.id);
     res.json({ success: true, data: aggregate });
   } catch (err) {
