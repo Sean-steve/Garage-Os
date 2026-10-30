@@ -32,7 +32,7 @@ import {
 export const roadsideRouter = Router();
 
 // Middleware: Authenticate actor context
-roadsideRouter.use(authenticate({ optional: true }));
+roadsideRouter.use(authenticate());
 
 function getActor(req: Request): AuthenticatedActorContext & { actor_id: string; roles: string[] } {
   if (req.actor) {
