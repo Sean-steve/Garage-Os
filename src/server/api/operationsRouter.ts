@@ -46,7 +46,7 @@ import {
 export const operationsRouter = Router();
 
 // Middleware: Authenticate actor context (populates req.actor)
-operationsRouter.use(authenticate({ optional: true }));
+operationsRouter.use(authenticate());
 
 function getActor(req: Request): AuthenticatedActorContext & { actor_id: string } {
   if (req.actor) {
