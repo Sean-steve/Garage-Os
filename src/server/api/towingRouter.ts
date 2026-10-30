@@ -688,6 +688,7 @@ towingRouter.post('/towing/recovery-units', async (req: Request, res: Response, 
     } = req.body;
 
     const resolvedProviderId = provider_id || actor.provider_id;
+    if (resolvedProviderId) assertProviderAccess(actor, resolvedProviderId);
     if (!resolvedProviderId || !unit_type || !registration_identifier) {
       throw new CanonicalAppError(
         ErrorCode.VALIDATION_ERROR,
@@ -718,6 +719,8 @@ towingRouter.post('/towing/recovery-units', async (req: Request, res: Response, 
  */
 towingRouter.get('/towing/providers/:providerId/recovery-units', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const actor = getActor(req);
+    assertProviderAccess(actor, req.params.providerId);
     const units = towingService.listProviderRecoveryUnits(req.params.providerId);
     res.json({ success: true, data: units });
   } catch (err) {
@@ -731,6 +734,7 @@ towingRouter.get('/towing/providers/:providerId/recovery-units', async (req: Req
  */
 towingRouter.post('/towing/compatibility-check', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const actor = getActor(req);
     const { vehicle, recovery_unit_id } = req.body;
 
     if (!vehicle || !recovery_unit_id) {
@@ -741,6 +745,7 @@ towingRouter.post('/towing/compatibility-check', async (req: Request, res: Respo
     if (!unit) {
       throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, `Recovery unit ${recovery_unit_id} not found`);
     }
+    assertProviderAccess(actor, unit.provider_id);
 
     const equipment = towingRepository.listUnitEquipment(unit.id);
     const classes = towingRepository.listUnitSupportedClasses(unit.id);
