@@ -85,6 +85,8 @@ dispatchRouter.post('/responders/:responderId/location', async (req: Request, re
       source_type,
     } = req.body;
 
+    assertResponderAccess(req.actor!, responderId);
+
     const result = locationService.ingestObservation({
       responder_type: responder_type || ResponderType.PROVIDER,
       responder_reference_id: responderId,
@@ -122,6 +124,7 @@ dispatchRouter.post('/responders/:responderId/location', async (req: Request, re
 dispatchRouter.get('/responders/:responderId/location', async (req: Request, res: Response) => {
   try {
     const { responderId } = req.params;
+    assertResponderAccess(req.actor!, responderId);
     const location = locationService.getCurrentLocation(responderId);
     if (!location) {
       return res.status(404).json({ error: 'Location not found for responder' });
