@@ -39,6 +39,7 @@ import {
 } from '../towing/types';
 import { canAccessProvider, assertProviderAccess } from '../dispatch/dispatchAuthorization';
 import { vehiclePolicy } from '../vehicle/vehiclePolicy';
+import { roadsideRepository } from '../roadside/roadsideRepository';
 import { CanonicalPermission } from '../identity/rbac';
 
 export const towingRouter = Router();
@@ -164,6 +165,20 @@ towingRouter.post('/towing/requests', async (req: Request, res: Response, next: 
 towingRouter.post('/towing/requests/from-roadside', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    const sourceIncident = roadsideRepository.getIncidentById(req.body.incident_id);
+    if (!sourceIncident) {
+      throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, 'Roadside incident not found', 404);
+    }
+    if (
+      sourceIncident.reported_by_user_id !== actor.id &&
+      !isPrivilegedTowingActor(actor)
+    ) {
+      throw new CanonicalAppError(
+        ErrorCode.NOT_AUTHORIZED,
+        'Roadside incident is not accessible to this actor',
+        403
+      );
+    }
     const { incident_id, tow_reason, destination } = req.body;
 
     if (!incident_id || !destination) {
