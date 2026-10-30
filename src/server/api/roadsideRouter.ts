@@ -177,6 +177,7 @@ roadsideRouter.get('/incidents/:id', (req: Request, res: Response, next: NextFun
 roadsideRouter.post('/incidents/:id/triage', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertIncidentOwnerAccess(actor, req.params.id);
     const answers = req.body.answers || req.body;
     const result = await roadsideService.conductTriage(req.params.id, answers, actor);
     res.json({ success: true, data: result });
@@ -191,6 +192,7 @@ roadsideRouter.post('/incidents/:id/triage', async (req: Request, res: Response,
 roadsideRouter.post('/incidents/:id/location', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertIncidentOwnerAccess(actor, req.params.id);
     const locationData = req.body;
     const location = await roadsideService.updateLocation(req.params.id, locationData, actor);
     res.json({ success: true, data: location });
@@ -205,6 +207,7 @@ roadsideRouter.post('/incidents/:id/location', async (req: Request, res: Respons
 roadsideRouter.post('/incidents/:id/request-assistance', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertIncidentOwnerAccess(actor, req.params.id);
     const result = await roadsideService.requestAssistance(req.params.id, req.body, actor);
     res.json({ success: true, data: result });
   } catch (err) {
@@ -217,6 +220,8 @@ roadsideRouter.post('/incidents/:id/request-assistance', async (req: Request, re
  */
 roadsideRouter.get('/incidents/:id/offers', (req: Request, res: Response, next: NextFunction) => {
   try {
+    const actor = getActor(req);
+    assertIncidentReadAccess(actor, req.params.id);
     const offers = roadsideRepository.getOffersByIncidentId(req.params.id);
     res.json({ success: true, count: offers.length, data: offers });
   } catch (err) {
@@ -230,6 +235,7 @@ roadsideRouter.get('/incidents/:id/offers', (req: Request, res: Response, next: 
 roadsideRouter.post('/incidents/:id/cancel', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertIncidentOwnerAccess(actor, req.params.id);
     const { reason, notes } = req.body;
     if (!reason) {
       throw new CanonicalAppError(ErrorCode.VALIDATION_ERROR, 'Cancellation reason is required');
@@ -247,6 +253,7 @@ roadsideRouter.post('/incidents/:id/cancel', async (req: Request, res: Response,
 roadsideRouter.post('/incidents/:id/evidence', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertIncidentOwnerAccess(actor, req.params.id);
     const evidence = await roadsideService.addEvidence(req.params.id, req.body, actor);
     res.status(201).json({ success: true, data: evidence });
   } catch (err) {
@@ -259,6 +266,8 @@ roadsideRouter.post('/incidents/:id/evidence', async (req: Request, res: Respons
  */
 roadsideRouter.get('/incidents/:id/activity', (req: Request, res: Response, next: NextFunction) => {
   try {
+    const actor = getActor(req);
+    assertIncidentReadAccess(actor, req.params.id);
     const activity = roadsideRepository.getActivityLog(req.params.id);
     res.json({ success: true, count: activity.length, data: activity });
   } catch (err) {
