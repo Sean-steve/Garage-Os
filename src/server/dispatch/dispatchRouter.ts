@@ -210,13 +210,25 @@ dispatchRouter.get('/requests/:id', async (req: Request, res: Response) => {
  */
 dispatchRouter.post('/requests/:id/offers/:offerId/accept', async (req: Request, res: Response) => {
   try {
-    const { responder_reference_id, actor } = req.body;
+    const { responder_reference_id } = req.body;
+    if (!responder_reference_id) {
+      throw new CanonicalAppError(
+        ErrorCode.VALIDATION_ERROR,
+        'responder_reference_id is required',
+        400
+      );
+    }
+    assertResponderAccess(req.actor!, responder_reference_id);
 
     const result = await dispatchService.acceptOffer({
       dispatchRequestId: req.params.id,
       offerId: req.params.offerId,
       responderReferenceId: responder_reference_id,
-      actor: actor || { id: 'api_actor', role: 'PROVIDER' },
+      actor: {
+        id: req.actor!.id,
+        role: req.actor!.roles?.[0] || req.actor!.active_membership?.role || 'PROVIDER',
+        name: req.actor!.profile.display_name,
+      },
     });
 
     res.json({ success: true, data: result });
