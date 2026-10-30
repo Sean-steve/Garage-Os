@@ -131,6 +131,8 @@ towingRouter.post('/towing/requests', async (req: Request, res: Response, next: 
       );
     }
 
+    vehiclePolicy.assertVehicleAccess(actor, vehicle_id, CanonicalPermission.VEHICLE_READ);
+
     const aggregate = await towingService.createTowRequest(
       {
         vehicle_id,
@@ -193,14 +195,28 @@ towingRouter.post('/towing/requests/from-roadside', async (req: Request, res: Re
  */
 towingRouter.get('/towing/requests', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const actor = getActor(req);
     const { vehicle_id, requesting_user_id, status, assigned_provider_id, organization_id } = req.query;
+
+    const requestedProviderId = assigned_provider_id as string | undefined;
+    const mayReadRequestedProvider =
+      requestedProviderId ? canAccessProvider(actor, requestedProviderId) : false;
 
     const requests = towingRepository.listTowRequests({
       vehicle_id: vehicle_id as string | undefined,
-      requesting_user_id: requesting_user_id as string | undefined,
-      organization_id: organization_id as string | undefined,
+      requesting_user_id: isPrivilegedTowingActor(actor)
+        ? (requesting_user_id as string | undefined)
+        : mayReadRequestedProvider
+          ? undefined
+          : actor.id,
+      organization_id: isPrivilegedTowingActor(actor)
+        ? (organization_id as string | undefined)
+        : undefined,
       status: status as TowRequestStatus | undefined,
-      assigned_provider_id: assigned_provider_id as string | undefined,
+      assigned_provider_id:
+        isPrivilegedTowingActor(actor) || mayReadRequestedProvider
+          ? requestedProviderId
+          : undefined,
     });
 
     res.json({ success: true, data: requests });
@@ -216,6 +232,7 @@ towingRouter.get('/towing/requests', async (req: Request, res: Response, next: N
 towingRouter.get('/towing/requests/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertTowRequestReadAccess(actor, req.params.id);
     const aggregate = towingService.getTowRequestById(req.params.id, actor);
 
     if (!aggregate) {
@@ -235,6 +252,7 @@ towingRouter.get('/towing/requests/:id', async (req: Request, res: Response, nex
 towingRouter.patch('/towing/requests/:id/destination', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertTowRequestOwnerAccess(actor, req.params.id);
     const {
       destination_type,
       provider_id,
@@ -285,6 +303,7 @@ towingRouter.patch('/towing/requests/:id/destination', async (req: Request, res:
 towingRouter.post('/towing/requests/:id/cancel', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertTowRequestOwnerAccess(actor, req.params.id);
     const { reason, notes } = req.body;
 
     if (!reason) {
