@@ -40,7 +40,7 @@ import {
 export const towingRouter = Router();
 
 // Middleware: Authenticate actor context (with optional mode for local dev flexibility)
-towingRouter.use(authenticate({ optional: true }));
+towingRouter.use(authenticate());
 
 function getActor(req: Request): TowActorContext & { actor_id: string; roles: string[] } {
   if (req.actor) {
