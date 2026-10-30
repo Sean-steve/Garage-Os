@@ -14,6 +14,7 @@ import { authService } from '../identity/authService';
 import { assertAuthorized, ResourceAuthorizationContext } from '../identity/policyEngine';
 import { CanonicalPermission } from '../identity/rbac';
 import { AccountStatus, AuthenticatedActorContext } from '../identity/types';
+import { config } from '../config/env';
 
 declare global {
   namespace Express {
@@ -40,15 +41,19 @@ export function authenticate(options: { optional?: boolean } = {}) {
 
       const activeOrgId = (req.headers['x-organization-id'] as string) || undefined;
       const explicitActorId = (req.headers['x-actor-id'] || req.headers['x-user-id']) as string | undefined;
+      const allowDevActorHeaders =
+        (config.APP_ENV === 'development' || config.APP_ENV === 'test') &&
+        process.env.GARAGE_OS_ALLOW_DEV_ACTOR_HEADERS === 'true';
 
       let actor: AuthenticatedActorContext | null = null;
 
       if (token) {
         actor = authService.authenticateSession(token, activeOrgId);
-      } else if (explicitActorId) {
+      } else if (explicitActorId && allowDevActorHeaders) {
+        // Explicit actor headers are a test/development-only escape hatch and are disabled by default.
         actor = authService.getActorContextById(explicitActorId.trim(), activeOrgId);
-      } else if (process.env.NODE_ENV !== 'production') {
-        // Controlled development seed fallback (Sprint 1 & 2 seed owner: Jane Wambui)
+      } else if (config.APP_ENV === 'development' || config.APP_ENV === 'test') {
+        // Controlled local seed fallback for the owner-facing development shell.
         actor = authService.getActorContextById('usr_seed_owner_01', activeOrgId);
       }
 
