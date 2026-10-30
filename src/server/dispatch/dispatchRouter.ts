@@ -242,13 +242,18 @@ dispatchRouter.post('/requests/:id/offers/:offerId/accept', async (req: Request,
  */
 dispatchRouter.post('/requests/:id/manual-assign', async (req: Request, res: Response) => {
   try {
-    const { candidate_id, override_reason, actor } = req.body;
+    assertOperationsAccess(req.actor!);
+    const { candidate_id, override_reason } = req.body;
 
     const result = await dispatchService.manualAssign({
       dispatchRequestId: req.params.id,
       candidateId: candidate_id,
       overrideReason: override_reason,
-      actor: actor || { id: 'dispatcher', role: 'OPERATIONS_AGENT', name: 'Dispatcher Agent' },
+      actor: {
+        id: req.actor!.id,
+        role: req.actor!.platform_roles[0] || 'OPERATIONS',
+        name: req.actor!.profile.display_name,
+      },
     });
 
     res.json({ success: true, data: result });
@@ -262,12 +267,17 @@ dispatchRouter.post('/requests/:id/manual-assign', async (req: Request, res: Res
  */
 dispatchRouter.post('/requests/:id/reassign', async (req: Request, res: Response) => {
   try {
-    const { reason, actor } = req.body;
+    assertOperationsAccess(req.actor!);
+    const { reason } = req.body;
 
     const result = await dispatchService.reassign({
       dispatchRequestId: req.params.id,
       reason: reason || 'Responder delayed / uncommunicative',
-      actor: actor || { id: 'dispatcher', role: 'OPERATIONS_AGENT', name: 'Dispatcher Agent' },
+      actor: {
+        id: req.actor!.id,
+        role: req.actor!.platform_roles[0] || 'OPERATIONS',
+        name: req.actor!.profile.display_name,
+      },
     });
 
     res.json({ success: true, data: result });
