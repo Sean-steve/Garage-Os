@@ -40,6 +40,13 @@ import { CanonicalPermission } from '../identity/rbac';
 
 export const apiV1Router = Router();
 
+function requireNonProduction(req: Request, _res: Response, next: (err?: unknown) => void): void {
+  if (config.APP_ENV === 'production') {
+    return next(new CanonicalAppError(ErrorCode.NOT_FOUND_OR_NOT_ACCESSIBLE, 'Resource not found', 404));
+  }
+  next();
+}
+
 // Mount Sprint 2 Identity, Auth & Organization Router
 apiV1Router.use(authRouter);
 
@@ -298,7 +305,7 @@ apiV1Router.get('/files/:id', async (req: Request, res: Response) => {
 });
 
 // 7. Test Verification Endpoints (for CI, test suites, and interactive validation)
-apiV1Router.post('/test/idempotency', (req: Request, res: Response) => {
+apiV1Router.post('/test/idempotency', requireNonProduction, authenticate(), requirePermission(CanonicalPermission.ADMIN_PLATFORM_MANAGE), (req: Request, res: Response) => {
   const { action, amount } = req.body;
   const transactionId = `tx_${Date.now()}`;
 
@@ -310,7 +317,7 @@ apiV1Router.post('/test/idempotency', (req: Request, res: Response) => {
   });
 });
 
-apiV1Router.post('/test/emit-event', (req: Request, res: Response) => {
+apiV1Router.post('/test/emit-event', requireNonProduction, authenticate(), requirePermission(CanonicalPermission.ADMIN_PLATFORM_MANAGE), (req: Request, res: Response) => {
   const { eventType, payload } = req.body;
 
   const event = createCanonicalEventEnvelope({
@@ -332,7 +339,7 @@ apiV1Router.post('/test/emit-event', (req: Request, res: Response) => {
   });
 });
 
-apiV1Router.post('/test/enqueue-job', (req: Request, res: Response) => {
+apiV1Router.post('/test/enqueue-job', requireNonProduction, authenticate(), requirePermission(CanonicalPermission.ADMIN_PLATFORM_MANAGE), (req: Request, res: Response) => {
   const { jobName, payload } = req.body;
 
   const jobId = jobEngine.enqueue(
