@@ -6,7 +6,7 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { getSanitizedConfig } from '../config/env';
+import { getSanitizedConfig, config } from '../config/env';
 import { getDatabase, checkDatabaseHealth } from '../database/connection';
 import { withTransaction } from '../database/transaction';
 import { outboxWorker, enqueueOutboxEvent } from '../events/outbox';
@@ -35,6 +35,8 @@ import { bookingRouter } from './bookingRouter';
 import { roadsideRouter } from './roadsideRouter';
 import { towingRouter } from './towingRouter';
 import { dispatchRouter } from '../dispatch/dispatchRouter';
+import { authenticate, requirePermission } from './authMiddleware';
+import { CanonicalPermission } from '../identity/rbac';
 
 export const apiV1Router = Router();
 
@@ -146,7 +148,7 @@ apiV1Router.get('/platform/capabilities', (req: Request, res: Response) => {
 });
 
 // 2. Traceability Matrix (GAR-049 §8 /v1/admin/traceability)
-apiV1Router.get('/admin/traceability', (req: Request, res: Response) => {
+apiV1Router.get('/admin/traceability', authenticate(), requirePermission(CanonicalPermission.ADMIN_AUDIT_READ), (req: Request, res: Response) => {
   return res.canonicalSuccess({
     total_requirements: SPRINT_1_TRACEABILITY_MATRIX.length,
     matrix: SPRINT_1_TRACEABILITY_MATRIX,
@@ -154,7 +156,7 @@ apiV1Router.get('/admin/traceability', (req: Request, res: Response) => {
 });
 
 // 3. Queue & Background Operations Inspector (GAR-036 §8 /v1/admin/queues)
-apiV1Router.get('/admin/queues', (req: Request, res: Response) => {
+apiV1Router.get('/admin/queues', authenticate(), requirePermission(CanonicalPermission.ADMIN_PLATFORM_MANAGE), (req: Request, res: Response) => {
   const db = getDatabase();
   const recentOutbox = db.prepare(`
     SELECT * FROM outbox_events ORDER BY created_at DESC LIMIT 20;
@@ -177,7 +179,7 @@ apiV1Router.get('/admin/queues', (req: Request, res: Response) => {
 });
 
 // 4. Immutable Audit Log Query (GAR-043 §8 /v1/admin/audit)
-apiV1Router.get('/admin/audit', (req: Request, res: Response) => {
+apiV1Router.get('/admin/audit', authenticate(), requirePermission(CanonicalPermission.ADMIN_AUDIT_READ), (req: Request, res: Response) => {
   const limit = Math.min(Number(req.query.limit) || 25, 100);
   const offset = Number(req.query.offset) || 0;
   const resourceType = req.query.resource_type ? String(req.query.resource_type) : undefined;
@@ -195,12 +197,12 @@ apiV1Router.get('/admin/audit', (req: Request, res: Response) => {
 });
 
 // 5. Feature Flags (GAR-046 §8 /v1/feature-flags)
-apiV1Router.get('/feature-flags', (req: Request, res: Response) => {
+apiV1Router.get('/feature-flags', authenticate(), requirePermission(CanonicalPermission.ADMIN_PLATFORM_MANAGE), (req: Request, res: Response) => {
   const flags = featureFlagManager.getAllFlags();
   return res.canonicalSuccess(flags);
 });
 
-apiV1Router.patch('/feature-flags/:key', (req: Request, res: Response) => {
+apiV1Router.patch('/feature-flags/:key', authenticate(), requirePermission(CanonicalPermission.ADMIN_PLATFORM_MANAGE), (req: Request, res: Response) => {
   const { key } = req.params;
   const { enabled, percentage } = req.body;
 
@@ -226,7 +228,7 @@ apiV1Router.patch('/feature-flags/:key', (req: Request, res: Response) => {
 });
 
 // 6. Secure Media / Evidence Upload (GAR-038 §8)
-apiV1Router.post('/uploads', async (req: Request, res: Response) => {
+apiV1Router.post('/uploads', authenticate(), async (req: Request, res: Response) => {
   const { filename, contentType, dataBase64, classification } = req.body;
 
   if (!filename || !contentType || !dataBase64) {
