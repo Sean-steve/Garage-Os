@@ -30,6 +30,8 @@ import {
   ProviderOfferStatus,
 } from '../roadside/types';
 import { canAccessProvider, assertProviderAccess } from '../dispatch/dispatchAuthorization';
+import { vehiclePolicy } from '../vehicle/vehiclePolicy';
+import { CanonicalPermission } from '../identity/rbac';
 
 export const roadsideRouter = Router();
 
@@ -108,6 +110,8 @@ roadsideRouter.post('/incidents', async (req: Request, res: Response, next: Next
         'Missing required fields: vehicle_id, incident_type, location (latitude, longitude)'
       );
     }
+
+    vehiclePolicy.assertVehicleAccess(actor, vehicle_id, CanonicalPermission.VEHICLE_READ);
 
     const result = await roadsideService.reportIncident(
       {
