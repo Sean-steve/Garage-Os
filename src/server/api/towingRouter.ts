@@ -400,6 +400,7 @@ towingRouter.post('/towing/assignments/:id/en-route', async (req: Request, res: 
     if (!assignment) {
       throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, `Assignment ${req.params.id} not found`);
     }
+    assertProviderAccess(actor, assignment.provider_id);
 
     const updated = await towingService.markEnRoute(req.params.id, assignment.provider_id, actor);
     res.json({ success: true, data: updated });
@@ -419,6 +420,7 @@ towingRouter.post('/towing/assignments/:id/arrived-pickup', async (req: Request,
     if (!assignment) {
       throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, `Assignment ${req.params.id} not found`);
     }
+    assertProviderAccess(actor, assignment.provider_id);
 
     const updated = await towingService.arrivePickup(req.params.id, assignment.provider_id, actor);
     res.json({ success: true, data: updated });
@@ -438,6 +440,7 @@ towingRouter.post('/towing/assignments/:id/inspections', async (req: Request, re
     if (!assignment) {
       throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, `Assignment ${req.params.id} not found`);
     }
+    assertProviderAccess(actor, assignment.provider_id);
 
     const { vehicle_condition_summary, visible_damage, mobility_state_confirmed, odometer_reading_km, notes, evidence } =
       req.body;
@@ -480,6 +483,7 @@ towingRouter.post('/towing/assignments/:id/start-loading', async (req: Request, 
     if (!assignment) {
       throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, `Assignment ${req.params.id} not found`);
     }
+    assertProviderAccess(actor, assignment.provider_id);
 
     const updated = await towingService.startLoading(req.params.id, assignment.provider_id, actor);
     res.json({ success: true, data: updated });
@@ -499,6 +503,7 @@ towingRouter.post('/towing/assignments/:id/confirm-loaded', async (req: Request,
     if (!assignment) {
       throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, `Assignment ${req.params.id} not found`);
     }
+    assertProviderAccess(actor, assignment.provider_id);
 
     const updated = await towingService.confirmVehicleLoaded(req.params.id, assignment.provider_id, actor);
     res.json({ success: true, data: updated });
@@ -518,6 +523,7 @@ towingRouter.post('/towing/assignments/:id/loading-failure', async (req: Request
     if (!assignment) {
       throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, `Assignment ${req.params.id} not found`);
     }
+    assertProviderAccess(actor, assignment.provider_id);
 
     const { failure_type, description, recoverable } = req.body;
     if (!failure_type || !description) {
@@ -552,6 +558,7 @@ towingRouter.post('/towing/assignments/:id/start-transit', async (req: Request, 
     if (!assignment) {
       throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, `Assignment ${req.params.id} not found`);
     }
+    assertProviderAccess(actor, assignment.provider_id);
 
     const updated = await towingService.startTransit(req.params.id, assignment.provider_id, actor);
     res.json({ success: true, data: updated });
@@ -571,6 +578,7 @@ towingRouter.post('/towing/assignments/:id/arrived-destination', async (req: Req
     if (!assignment) {
       throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, `Assignment ${req.params.id} not found`);
     }
+    assertProviderAccess(actor, assignment.provider_id);
 
     const updated = await towingService.arriveDestination(req.params.id, assignment.provider_id, actor);
     res.json({ success: true, data: updated });
@@ -590,6 +598,7 @@ towingRouter.post('/towing/assignments/:id/start-unloading', async (req: Request
     if (!assignment) {
       throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, `Assignment ${req.params.id} not found`);
     }
+    assertProviderAccess(actor, assignment.provider_id);
 
     const updated = await towingService.startUnloading(req.params.id, assignment.provider_id, actor);
     res.json({ success: true, data: updated });
@@ -609,6 +618,7 @@ towingRouter.post('/towing/assignments/:id/confirm-delivery', async (req: Reques
     if (!assignment) {
       throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, `Assignment ${req.params.id} not found`);
     }
+    assertProviderAccess(actor, assignment.provider_id);
 
     const {
       recipient_type,
