@@ -39,9 +39,20 @@ dispatchRouter.post('/responders/:responderId/presence', async (req: Request, re
   try {
     const { responderId } = req.params;
     const { provider_id, responder_type, status, current_job_reference } = req.body;
+    const existingPresence = locationService.getPresence(responderId);
+    const effectiveProviderId = provider_id || existingPresence?.provider_id;
+
+    if (!effectiveProviderId) {
+      throw new CanonicalAppError(
+        ErrorCode.VALIDATION_ERROR,
+        'provider_id is required when registering responder presence',
+        400
+      );
+    }
+    assertProviderAccess(req.actor!, effectiveProviderId);
 
     const presence = locationService.updatePresence({
-      provider_id: provider_id || 'unknown_provider',
+      provider_id: effectiveProviderId,
       responder_type: responder_type || ResponderType.PROVIDER,
       responder_reference_id: responderId,
       status: status || ResponderAvailabilityStatus.AVAILABLE,
