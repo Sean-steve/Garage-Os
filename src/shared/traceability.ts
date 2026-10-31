@@ -579,7 +579,7 @@ export const SPRINT_17_TRACEABILITY_MATRIX: TraceabilityItem[] = [
     source: 'GAR-017/GAR-032/GAR-035/GAR-036/GAR-039/GAR-040/GAR-049',
     title: 'Trusted Contact Experience',
     criticality: 'LAUNCH_CRITICAL',
-    status: 'IMPLEMENTED',
+    status: 'VERIFIED',
     implementation_refs: [
       'src/server/safety/trustedContactRepository.ts',
       'src/server/safety/trustedContactService.ts',
