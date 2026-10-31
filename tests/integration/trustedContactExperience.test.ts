@@ -22,6 +22,7 @@ import {
   TrustedContactResponse,
 } from '../../src/server/safety/types';
 import { CanonicalAppError, ErrorCode } from '../../src/shared/errors';
+import { vehicleService } from '../../src/server/vehicle/vehicleService';
 
 function actor(userId: string, email: string) {
   return {
@@ -52,6 +53,7 @@ function tokenFromPortalUrl(url: string): string {
 describe('Trusted Contact Experience (GAR-017)', () => {
   let db: any;
   let capturedNotification: SafetyNotificationRequest | null;
+  let vehicleId: string;
   const owner = actor('usr_tc_owner', 'owner@trusted.test');
   const other = actor('usr_tc_other', 'other@trusted.test');
 
@@ -83,22 +85,13 @@ describe('Trusted Contact Experience (GAR-017)', () => {
       '2026-10-31T00:00:00.000Z'
     );
 
-    db.prepare(`
-      INSERT INTO vehicles (
-        id, owner_scope_type, owner_id, display_name, make, model, model_year,
-        registration_number, status, created_at, updated_at
-      ) VALUES (?, 'USER', ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?)
-    `).run(
-      'veh_tc_01',
-      owner.user_id,
-      'Daily Car',
-      'Toyota',
-      'Axio',
-      2018,
-      'KDA 123A',
-      '2026-10-31T00:00:00.000Z',
-      '2026-10-31T00:00:00.000Z'
-    );
+    const createdVehicle = vehicleService.createVehicle(owner, {
+      make: 'Toyota',
+      model: 'Axio',
+      model_year: 2018,
+      registration_number: 'KDA 123A',
+    });
+    vehicleId = createdVehicle.vehicle.id;
 
     setSafetyNotificationAdapter({
       async send(request) {
@@ -138,7 +131,7 @@ describe('Trusted Contact Experience (GAR-017)', () => {
     safetyService.updatePreferences(owner, { allow_location_sharing: true });
 
     const aggregate = sosService.initiate(owner, {
-      vehicle_id: 'veh_tc_01',
+      vehicle_id: vehicleId,
       incident_type: 'COLLISION',
       incident_level: SafetyIncidentLevel.SERIOUS_EMERGENCY,
       location: {
@@ -243,7 +236,7 @@ describe('Trusted Contact Experience (GAR-017)', () => {
     });
 
     const aggregate = sosService.initiate(owner, {
-      vehicle_id: 'veh_tc_01',
+      vehicle_id: vehicleId,
       incident_type: 'PRIVATE_INCIDENT',
       location: { latitude: -1.28, longitude: 36.81 },
     });
