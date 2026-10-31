@@ -108,7 +108,7 @@ export const BentoAccidents:React.FC<Props>=({vehicles,selectedVehicleId,onSelec
     try{
       const dataBase64=await readFileBase64(file);
       const upload=await fetch('/api/v1/uploads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-        filename:file.name,contentType:file.type||'application/octet-stream',dataBase64,classification:'RESTRICTED'
+        filename:file.name,contentType:file.type||'application/octet-stream',dataBase64,classification:'CONFIDENTIAL'
       })});
       const uj=await upload.json(); if(!upload.ok) throw new Error(uj?.error?.message||'Evidence upload failed');
       const stored=unwrap(uj);
