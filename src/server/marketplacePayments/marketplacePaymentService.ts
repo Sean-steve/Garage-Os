@@ -207,7 +207,8 @@ export class MarketplacePaymentService{
         order_id:input.order_id||null,payment_intent_id:null,issue_type:'UNKNOWN_PAYMENT_INTENT',details:'Verified provider event could not be matched to an intent',created_at:now});
       return {duplicate:false,event,financial:null};
     }
-    if(intent.order_id!==input.order_id||intent.amount_minor!==Number(input.amount_minor)||intent.currency!==String(input.currency||'').toUpperCase()){
+    const isPaymentEvent=input.event_type.startsWith('PAYMENT_');
+    if(intent.order_id!==input.order_id||intent.currency!==String(input.currency||'').toUpperCase()||(isPaymentEvent&&intent.amount_minor!==Number(input.amount_minor))){
       const event=this.recordRejectedEvent(provider.id,input,payloadHash,'AMOUNT_CURRENCY_OR_ORDER_MISMATCH',intent.id,null,now);
       repo.createReconciliationIssue({id:generateCanonicalId('mpayissue'),provider_id:provider.id,provider_event_id:input.provider_event_id,
         order_id:input.order_id,payment_intent_id:intent.id,issue_type:'PAYMENT_FACT_MISMATCH',
@@ -238,10 +239,13 @@ export class MarketplacePaymentService{
     let processedMessage='Processed';
     withTransaction(({db})=>{
       const bound={...intent,provider_payment_id:intent.provider_payment_id||input.provider_payment_id,updated_at:now};
+      const beforeFinancial=repo.financialSummary(intent.order_id);
       if(input.event_type==='PAYMENT_PENDING'){
-        repo.updateIntent({...bound,status:'PENDING'});
+        if(beforeFinancial.captured_minor>0)processedMessage='Ignored after authoritative capture';
+        else repo.updateIntent({...bound,status:'PENDING'});
       }else if(input.event_type==='PAYMENT_FAILED'){
-        repo.updateIntent({...bound,status:'FAILED',failure_code:input.failure_code||'PROVIDER_DECLINED',
+        if(beforeFinancial.captured_minor>0)processedMessage='Ignored after authoritative capture';
+        else repo.updateIntent({...bound,status:'FAILED',failure_code:input.failure_code||'PROVIDER_DECLINED',
           failure_message:input.failure_message||'Payment provider reported failure'});
       }else if(input.event_type==='PAYMENT_SUCCEEDED'){
         repo.updateIntent({...bound,status:'SUCCEEDED',failure_code:null,failure_message:null});
