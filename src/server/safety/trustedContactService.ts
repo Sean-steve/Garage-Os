@@ -11,6 +11,7 @@ import { generateCanonicalId } from '../domain/id';
 import { createCanonicalEventEnvelope } from '../events/envelope';
 import { enqueueOutboxEvent } from '../events/outbox';
 import { recordAuditEvent } from '../security/audit';
+import { jobEngine } from '../jobs/jobEngine';
 import { CanonicalActorType } from '../../shared/types';
 import { DataProvenanceClass } from '../../shared/provenance';
 import { CanonicalAppError, ErrorCode } from '../../shared/errors';
@@ -67,6 +68,8 @@ function portalUrl(token: string): string {
   // HTTP request, server access logs, or Referer header.
   return `${base}/trusted-contact#token=${encodeURIComponent(token)}`;
 }
+
+export const TRUSTED_CONTACT_ACCESS_EXPIRY_JOB = 'safety.trusted_contact.access_expiry';
 
 export class TrustedContactService {
   ensureGrantForNotificationAttempt(attempt: SosNotificationAttempt): {
@@ -164,6 +167,12 @@ export class TrustedContactService {
         db
       );
     });
+
+    jobEngine.enqueue(
+      TRUSTED_CONTACT_ACCESS_EXPIRY_JOB,
+      { grant_id: grant.id },
+      { runAt: grant.expires_at, correlationId: grant.incident_id, maxRetries: 3 }
+    );
 
     return { grant, token, portal_url: portalUrl(token) };
   }
