@@ -806,3 +806,62 @@ export const SPRINT_21_TRACEABILITY_MATRIX: TraceabilityItem[] = [
     notes: 'Trip Guardian foundation owns journey state, journey-specific sharing consent and check-ins. It reuses Car Care pre-trip missions and SOS truth. No crash detection, injury inference, automatic emergency escalation or continuous live tracking is claimed.',
   },
 ];
+
+
+/**
+ * Sprint 22 — Marketplace Foundation (GAR-021).
+ */
+export const SPRINT_22_TRACEABILITY_MATRIX: TraceabilityItem[] = [
+  {
+    requirement_id: 'GAR-DEV-S22',
+    source: 'GAR-021/GAR-003/GAR-010/GAR-022/GAR-024/GAR-033/GAR-034/GAR-035/GAR-038/GAR-039/GAR-040/GAR-049',
+    title: 'Automotive Marketplace Foundation',
+    criticality: 'LAUNCH_CRITICAL',
+    status: 'VERIFIED',
+    implementation_refs: [
+      'src/server/marketplace/types.ts',
+      'src/server/marketplace/marketplaceRepository.ts',
+      'src/server/marketplace/marketplaceService.ts',
+      'src/server/api/marketplaceRouter.ts',
+      'src/client/components/BentoMarketplace.tsx',
+    ],
+    schema_refs: [
+      'marketplace_stores',
+      'marketplace_categories',
+      'marketplace_products',
+      'marketplace_listings',
+      'marketplace_listing_media',
+      'marketplace_listing_price_snapshots',
+      'marketplace_listing_search_projection',
+    ],
+    api_event_refs: [
+      'GET /api/v1/marketplace/categories',
+      'GET /api/v1/marketplace/search',
+      'GET /api/v1/marketplace/listings/:id',
+      'GET /api/v1/marketplace/stores/:slug',
+      'GET/POST /api/v1/marketplace/seller/stores',
+      'PATCH /api/v1/marketplace/seller/stores/:storeId',
+      'GET/POST /api/v1/marketplace/seller/stores/:storeId/products',
+      'PATCH /api/v1/marketplace/seller/stores/:storeId/products/:productId',
+      'POST /api/v1/marketplace/seller/stores/:storeId/products/:productId/listing',
+      'GET /api/v1/marketplace/seller/stores/:storeId/listings',
+      'PATCH /api/v1/marketplace/seller/stores/:storeId/listings/:listingId',
+      'POST /api/v1/marketplace/seller/stores/:storeId/listings/:listingId/publish',
+      'POST /api/v1/marketplace/seller/stores/:storeId/listings/:listingId/pause',
+      'POST /api/v1/marketplace/seller/stores/:storeId/listings/:listingId/media',
+      'marketplace.store.created',
+      'marketplace.store.updated',
+      'marketplace.product.created',
+      'marketplace.product.updated',
+      'marketplace.listing.created',
+      'marketplace.listing.updated',
+      'marketplace.listing.published',
+      'marketplace.listing.paused',
+      'marketplace.listing.media.added',
+    ],
+    ui_refs: ['src/client/components/BentoMarketplace.tsx'],
+    test_refs: ['tests/integration/marketplaceFoundation.test.ts'],
+    ops_refs: ['audit_events', 'outbox_events'],
+    notes: 'Sprint 22 is physical-goods marketplace foundation only. Fitment remains database-constrained UNKNOWN until Sprint 23; authenticity remains NOT_VERIFIED; checkout/orders/payments are absent until their owning sprint.',
+  },
+];
