@@ -95,6 +95,7 @@ export class RoadsideDispatchAdapter implements DispatchDomainAdapter {
     }
     const requestId = req.id;
 
+    const db = getDatabase();
     const providerPricing = db
       .prepare('SELECT callout_fee, currency FROM service_providers WHERE id = ? LIMIT 1')
       .get(params.candidate.provider_id) as
