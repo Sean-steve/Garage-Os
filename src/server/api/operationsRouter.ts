@@ -25,6 +25,7 @@ import {
   MembershipStatus,
   OrganizationStatus,
   OrganizationType,
+  PlatformRole,
 } from '../identity/types';
 import {
   CreateServiceCaseDto,
@@ -42,6 +43,8 @@ import {
   PerformRoadTestDto,
   ReleaseVehicleDto,
 } from '../operations/types';
+import { assertProviderAccess } from '../dispatch/dispatchAuthorization';
+import { operationsRepository } from '../operations/operationsRepository';
 
 export const operationsRouter = Router();
 
@@ -49,52 +52,37 @@ export const operationsRouter = Router();
 operationsRouter.use(authenticate());
 
 function getActor(req: Request): AuthenticatedActorContext & { actor_id: string } {
-  if (req.actor) {
-    return {
-      ...req.actor,
-      actor_id: req.actor.user_id || req.actor.id,
-    };
+  if (!req.actor) {
+    throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Authentication required', 401);
   }
   return {
-    id: 'usr_dev_advisor_01',
-    user_id: 'usr_dev_advisor_01',
-    actor_id: 'usr_dev_advisor_01',
-    email: 'advisor@garage-os.local',
-    account_status: AccountStatus.ACTIVE,
-    platform_roles: [],
-    profile: {
-      id: 'prof_dev_advisor_01',
-      user_id: 'usr_dev_advisor_01',
-      given_name: 'Dev',
-      family_name: 'Advisor',
-      phone_number: '+254700000000',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    } as any,
-    memberships: [
-      {
-        membership_id: 'mem_dev_01',
-        organization_id: 'org_dev_provider_01',
-        organization_name: 'Dev Workshop',
-        organization_type: OrganizationType.AUTOMOTIVE_SERVICE_PROVIDER,
-        organization_status: OrganizationStatus.ACTIVE,
-        role: MembershipRole.ADMIN,
-        status: MembershipStatus.ACTIVE,
-      },
-    ],
-    active_organization_id: 'org_dev_provider_01',
-    active_membership: {
-      membership_id: 'mem_dev_01',
-      organization_id: 'org_dev_provider_01',
-      organization_name: 'Dev Workshop',
-      organization_type: OrganizationType.AUTOMOTIVE_SERVICE_PROVIDER,
-      organization_status: OrganizationStatus.ACTIVE,
-      role: MembershipRole.ADMIN,
-      status: MembershipStatus.ACTIVE,
-      permissions: Object.values(CanonicalPermission) as string[],
-    },
-    session_id: 'sess_dev_01',
+    ...req.actor,
+    actor_id: req.actor.user_id || req.actor.id,
   };
+}
+
+function isPrivilegedOperationsActor(actor: AuthenticatedActorContext): boolean {
+  return actor.platform_roles.some((role) =>
+    [PlatformRole.PLATFORM_ADMIN, PlatformRole.OPERATIONS, PlatformRole.SUPPORT_AGENT].includes(role)
+  );
+}
+
+function assertServiceCaseProviderAccess(actor: AuthenticatedActorContext, serviceCaseId: string): void {
+  const serviceCase = operationsRepository.getServiceCaseById(serviceCaseId);
+  if (!serviceCase) {
+    throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, 'Service Case not found', 404);
+  }
+  if (isPrivilegedOperationsActor(actor)) return;
+  assertProviderAccess(actor, serviceCase.provider_id);
+}
+
+function assertWorkOrderProviderAccess(actor: AuthenticatedActorContext, workOrderId: string): void {
+  const workOrder = operationsRepository.getWorkOrderById(workOrderId);
+  if (!workOrder) {
+    throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, 'Work Order not found', 404);
+  }
+  if (isPrivilegedOperationsActor(actor)) return;
+  assertProviderAccess(actor, workOrder.provider_id);
 }
 
 // ---------------- Service Cases ----------------
