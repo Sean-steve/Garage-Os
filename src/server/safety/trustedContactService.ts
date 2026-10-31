@@ -76,6 +76,23 @@ export class TrustedContactService {
   } {
     const existing = trustedContactRepository.getGrantByNotificationAttempt(attempt.id);
     if (existing) {
+      const now = getCurrentUtcIsoString();
+      if (
+        existing.status !== TrustedContactGrantStatus.ACTIVE ||
+        existing.expires_at <= now
+      ) {
+        if (
+          existing.status === TrustedContactGrantStatus.ACTIVE &&
+          existing.expires_at <= now
+        ) {
+          trustedContactRepository.expireGrant(existing.id, now);
+        }
+        throw new CanonicalAppError(
+          ErrorCode.INVALID_STATE_TRANSITION,
+          'Trusted-contact access for this notification attempt is no longer active',
+          409
+        );
+      }
       const token = rawTokenForGrant(existing.id);
       return { grant: existing, token, portal_url: portalUrl(token) };
     }
@@ -286,6 +303,11 @@ export class TrustedContactService {
       );
     }
 
+    const latest = trustedContactRepository.getLatestResponse(grant.id);
+    if (latest?.response === response) {
+      return this.resolvePortal(token);
+    }
+
     const now = getCurrentUtcIsoString();
     const record: TrustedContactResponseRecord = {
       id: generateCanonicalId('tcr'),
@@ -321,7 +343,7 @@ export class TrustedContactService {
           },
           actor_id: grant.contact_id,
           actor_type: CanonicalActorType.TRUSTED_CONTACT,
-          provenance_class: DataProvenanceClass.OWNER_ASSERTED,
+          provenance_class: DataProvenanceClass.EXTERNALLY_VERIFIED,
           payload: {
             incident_id: grant.incident_id,
             grant_id: grant.id,
