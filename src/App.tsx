@@ -19,6 +19,7 @@ import { BentoTraceability } from './client/components/BentoTraceability';
 import { BentoBookings } from './client/components/BentoBookings';
 import { BentoDomainConsole } from './client/components/BentoDomainConsole';
 import { LoginGate } from './client/components/LoginGate';
+import { BentoSafety } from './client/components/BentoSafety';
 import {
   ActiveTab,
   PlatformCapabilities,
@@ -392,6 +393,7 @@ export default function App() {
         {activeTab === 'roadside' && <BentoDomainConsole mode="roadside" />}
         {activeTab === 'towing' && <BentoDomainConsole mode="towing" />}
         {activeTab === 'dispatch' && <BentoDomainConsole mode="dispatch" />}
+        {activeTab === 'safety' && <BentoSafety />}
 
         {activeTab === 'queues' && (
           <BentoQueues
