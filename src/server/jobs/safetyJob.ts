@@ -52,10 +52,12 @@ export function registerSafetyJobWorkers(): void {
     });
   });
 
-  jobEngine.registerWorker(TRUSTED_CONTACT_ACCESS_EXPIRY_JOB, async (_payload: any, correlationId: string) => {
-    const expired = trustedContactService.expireDueGrants();
+  jobEngine.registerWorker(TRUSTED_CONTACT_ACCESS_EXPIRY_JOB, async (payload: any, correlationId: string) => {
+    const grantId = String(payload?.grant_id || '');
+    const expired = grantId ? trustedContactService.expireGrantIfDue(grantId) : false;
     logger.info('Trusted-contact access expiry processed', {
       correlation_id: correlationId,
+      resource_id: grantId || undefined,
       details: { expired },
     });
   });
