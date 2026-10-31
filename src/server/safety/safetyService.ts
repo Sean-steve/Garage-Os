@@ -535,7 +535,7 @@ export class SafetyService {
         safety_check_enabled: preferences.safety_check_enabled,
         sos_engine_active: true,
         notification_engine_active: true,
-        trusted_contact_portal_active: false,
+        trusted_contact_portal_active: true,
         blockers: ['Emergency Circle is disabled by the user.'],
         notes: ['The SOS engine is operational, but Emergency Circle contact notification is disabled by the user. External assistance is never implied.'],
       };
@@ -552,10 +552,10 @@ export class SafetyService {
       safety_check_enabled: preferences.safety_check_enabled,
       sos_engine_active: true,
       notification_engine_active: true,
-      trusted_contact_portal_active: false,
+      trusted_contact_portal_active: true,
       blockers,
       notes: [
-        'Sprint 16 provides durable SOS activation and notification-attempt orchestration.',
+        'Sprint 16 provides durable SOS activation and notification-attempt orchestration; Sprint 17 adds scoped trusted-contact portal access.',
         'Notification delivery is only confirmed when a configured provider returns authoritative delivery evidence.',
         'Trusted-contact temporary web access is available through scoped expiring links; automatic escalation remains unavailable.',
         'Failure to respond must never be treated as proof of injury.',
