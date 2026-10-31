@@ -524,7 +524,7 @@ export const SPRINT_16_TRACEABILITY_MATRIX: TraceabilityItem[] = [
     source: 'GAR-017/GAR-032/GAR-035/GAR-036/GAR-039/GAR-040/GAR-049',
     title: 'SOS Engine & Emergency Activation',
     criticality: 'LAUNCH_CRITICAL',
-    status: 'IMPLEMENTED',
+    status: 'VERIFIED',
     implementation_refs: [
       'src/server/safety/sosRepository.ts',
       'src/server/safety/sosService.ts',
