@@ -46,54 +46,12 @@ import {
 export const operationsRouter = Router();
 
 // Middleware: Authenticate actor context (populates req.actor)
-operationsRouter.use(authenticate({ optional: true }));
+operationsRouter.use(authenticate());
 
 function getActor(req: Request): AuthenticatedActorContext & { actor_id: string } {
-  if (req.actor) {
-    return {
-      ...req.actor,
-      actor_id: req.actor.user_id || req.actor.id,
-    };
-  }
   return {
-    id: 'usr_dev_advisor_01',
-    user_id: 'usr_dev_advisor_01',
-    actor_id: 'usr_dev_advisor_01',
-    email: 'advisor@garage-os.local',
-    account_status: AccountStatus.ACTIVE,
-    platform_roles: [],
-    profile: {
-      id: 'prof_dev_advisor_01',
-      user_id: 'usr_dev_advisor_01',
-      given_name: 'Dev',
-      family_name: 'Advisor',
-      phone_number: '+254700000000',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    } as any,
-    memberships: [
-      {
-        membership_id: 'mem_dev_01',
-        organization_id: 'org_dev_provider_01',
-        organization_name: 'Dev Workshop',
-        organization_type: OrganizationType.AUTOMOTIVE_SERVICE_PROVIDER,
-        organization_status: OrganizationStatus.ACTIVE,
-        role: MembershipRole.ADMIN,
-        status: MembershipStatus.ACTIVE,
-      },
-    ],
-    active_organization_id: 'org_dev_provider_01',
-    active_membership: {
-      membership_id: 'mem_dev_01',
-      organization_id: 'org_dev_provider_01',
-      organization_name: 'Dev Workshop',
-      organization_type: OrganizationType.AUTOMOTIVE_SERVICE_PROVIDER,
-      organization_status: OrganizationStatus.ACTIVE,
-      role: MembershipRole.ADMIN,
-      status: MembershipStatus.ACTIVE,
-      permissions: Object.values(CanonicalPermission) as string[],
-    },
-    session_id: 'sess_dev_01',
+    ...req.actor!,
+    actor_id: req.actor!.user_id || req.actor!.id,
   };
 }
 
