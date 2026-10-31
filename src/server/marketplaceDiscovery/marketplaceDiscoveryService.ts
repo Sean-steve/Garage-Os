@@ -255,6 +255,9 @@ export class MarketplaceDiscoveryService{
     withTransaction(({db})=>{
       repo.createCollection(v);this.emit(actor,'marketplace.merchandising.collection.created',v.id,v.store_id,{collection_id:v.id,
         owner_type:v.owner_type,surface:v.surface,source_label:v.source_label,paid_placement:false,affects_organic_ranking:false},db);
+      recordAuditEvent({actor_id:actor.user_id,actor_type:actorType(actor),action:'MARKETPLACE_MERCHANDISING_COLLECTION_CREATED',
+        resource_type:'marketplace_merchandising_collection',resource_id:v.id,correlation_id:v.id,source:'MARKETPLACE_DISCOVERY_API',
+        after_state:{owner_type:v.owner_type,store_id:v.store_id,surface:v.surface,source_label:v.source_label,status:v.status}},db);
     });
     return repo.detail(v);
   }
@@ -300,6 +303,9 @@ export class MarketplaceDiscoveryService{
     withTransaction(({db})=>{
       repo.replaceItems(current.id,items);this.emit(actor,'marketplace.merchandising.items.replaced',current.id,current.store_id,
         {collection_id:current.id,item_count:items.length,affects_organic_ranking:false,paid_placement:false},db);
+      recordAuditEvent({actor_id:actor.user_id,actor_type:actorType(actor),action:'MARKETPLACE_MERCHANDISING_ITEMS_REPLACED',
+        resource_type:'marketplace_merchandising_collection',resource_id:current.id,correlation_id:current.id,source:'MARKETPLACE_DISCOVERY_API',
+        after_state:{item_count:items.length,listing_ids:items.map(x=>x.listing_id),affects_organic_ranking:false}},db);
     });
     return repo.detail(current);
   }
@@ -314,7 +320,7 @@ export class MarketplaceDiscoveryService{
   private emit(actor:AuthenticatedActorContext,type:string,correlationId:string,storeId:string|null,payload:any,db:any){
     enqueueOutboxEvent(createCanonicalEventEnvelope({type,producer:'garage-os-marketplace-discovery',correlation_id:correlationId,
       subject_ids:{...(storeId?{marketplace_store:storeId}:{}),marketplace_merchandising_collection:correlationId},
-      actor_id:actor.user_id,actor_type:actorType(actor),provenance_class:DataProvenanceClass.DERIVED_DETERMINISTIC,payload}),db);
+      actor_id:actor.user_id,actor_type:actorType(actor),provenance_class:DataProvenanceClass.OWNER_ASSERTED,payload}),db);
   }
 }
 export const marketplaceDiscoveryService=new MarketplaceDiscoveryService();
