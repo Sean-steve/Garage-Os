@@ -4958,7 +4958,7 @@ export const MIGRATIONS: Migration[] = [
         DROP TABLE IF EXISTS marketplace_stores;
       `);
     },
-  },,
+  },
   {
     id: '024_vehicle_compatibility_fitment',
     name: 'Vehicle Compatibility & Fitment Architecture (GAR-022)',
