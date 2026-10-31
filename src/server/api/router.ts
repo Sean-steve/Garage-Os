@@ -18,7 +18,7 @@ import { storageEngine } from '../storage/storageEngine';
 import { listAuditEvents, recordAuditEvent } from '../security/audit';
 import { featureFlagManager } from '../featureFlags/flags';
 import { metrics } from '../observability/metrics';
-import { SPRINT_1_TRACEABILITY_MATRIX, R1_SPRINT_1_TO_14_TRACEABILITY_MATRIX, SPRINT_15_TRACEABILITY_MATRIX, SPRINT_16_TRACEABILITY_MATRIX, SPRINT_17_TRACEABILITY_MATRIX, SPRINT_18_TRACEABILITY_MATRIX, SPRINT_19_TRACEABILITY_MATRIX, SPRINT_20_TRACEABILITY_MATRIX, SPRINT_21_TRACEABILITY_MATRIX, SPRINT_22_TRACEABILITY_MATRIX, SPRINT_23_TRACEABILITY_MATRIX, SPRINT_24_TRACEABILITY_MATRIX, SPRINT_25_TRACEABILITY_MATRIX } from '../../shared/traceability';
+import { SPRINT_1_TRACEABILITY_MATRIX, R1_SPRINT_1_TO_14_TRACEABILITY_MATRIX, SPRINT_15_TRACEABILITY_MATRIX, SPRINT_16_TRACEABILITY_MATRIX, SPRINT_17_TRACEABILITY_MATRIX, SPRINT_18_TRACEABILITY_MATRIX, SPRINT_19_TRACEABILITY_MATRIX, SPRINT_20_TRACEABILITY_MATRIX, SPRINT_21_TRACEABILITY_MATRIX, SPRINT_22_TRACEABILITY_MATRIX, SPRINT_23_TRACEABILITY_MATRIX, SPRINT_24_TRACEABILITY_MATRIX, SPRINT_25_TRACEABILITY_MATRIX, SPRINT_26_TRACEABILITY_MATRIX } from '../../shared/traceability';
 import { PlatformLifecycleState, CanonicalActorType } from '../../shared/types';
 import { CanonicalAppError, ErrorCode } from '../../shared/errors';
 import { DataProvenanceClass } from '../../shared/provenance';
@@ -47,6 +47,7 @@ import { marketplaceRouter } from './marketplaceRouter';
 import { fitmentRouter } from './fitmentRouter';
 import { marketplaceTransactionRouter } from './marketplaceTransactionRouter';
 import { marketplacePaymentRouter } from './marketplacePaymentRouter';
+import { marketplaceFulfillmentRouter } from './marketplaceFulfillmentRouter';
 
 export const apiV1Router = Router();
 
@@ -131,6 +132,9 @@ apiV1Router.use(marketplaceTransactionRouter);
 // Provider webhook route is internally signature-authenticated before user-session routes.
 apiV1Router.use(marketplacePaymentRouter);
 
+// Mount Sprint 26 Marketplace Fulfillment, Delivery & Returns Router.
+apiV1Router.use(marketplaceFulfillmentRouter);
+
 // 1. Platform Capabilities (GAR-002 §8 /v1/platform/capabilities)
 apiV1Router.get('/platform/capabilities', (req: Request, res: Response) => {
   const dbHealth = checkDatabaseHealth();
@@ -142,12 +146,12 @@ apiV1Router.get('/platform/capabilities', (req: Request, res: Response) => {
 
   const capabilities = {
     platform_name: 'Garage OS',
-    version: '25.0.0-sprint25',
+    version: '26.0.0-sprint26',
     environment: process.env.NODE_ENV || 'development',
     lifecycle_state: PlatformLifecycleState.ACTIVE,
     architecture_baseline: 'GAR-000-to-GAR-051',
-    active_sprint: 'Sprint 25: Marketplace Payments & Settlement',
-    next_sprint: 'Sprint 26: Marketplace Fulfillment, Delivery & Returns',
+    active_sprint: 'Sprint 26: Marketplace Fulfillment, Delivery & Returns',
+    next_sprint: 'Sprint 27: Marketplace Trust, Reviews & Disputes',
     constitutional_laws_enforced: 12,
     config: getSanitizedConfig(),
     domains: [
@@ -173,6 +177,7 @@ apiV1Router.get('/platform/capabilities', (req: Request, res: Response) => {
       { id: 'GAR-022', title: 'Vehicle Compatibility & Fitment', status: 'ACTIVE_IMPLEMENTED_SPRINT_23', owner: 'Marketplace / Vehicle Compatibility Domain' },
       { id: 'GAR-021-TX', title: 'Marketplace Transactions & Orders', status: 'ACTIVE_IMPLEMENTED_SPRINT_24', owner: 'Marketplace Transactions Domain' },
       { id: 'GAR-021-PAY', title: 'Marketplace Payments & Settlement', status: 'ACTIVE_IMPLEMENTED_SPRINT_25', owner: 'Marketplace Financial Transactions Domain' },
+      { id: 'GAR-021-FUL', title: 'Marketplace Fulfillment, Delivery & Returns', status: 'ACTIVE_IMPLEMENTED_SPRINT_26', owner: 'Marketplace Fulfillment Domain' },
     ],
     subsystems: {
       database: {
@@ -212,12 +217,12 @@ apiV1Router.get('/platform/capabilities', (req: Request, res: Response) => {
 
 // 2. Traceability Matrix (GAR-049 §8 /v1/admin/traceability)
 apiV1Router.get('/admin/traceability', authenticate(), requirePlatformAdmin, (req: Request, res: Response) => {
-  const matrix = [...SPRINT_1_TRACEABILITY_MATRIX, ...R1_SPRINT_1_TO_14_TRACEABILITY_MATRIX, ...SPRINT_15_TRACEABILITY_MATRIX, ...SPRINT_16_TRACEABILITY_MATRIX, ...SPRINT_17_TRACEABILITY_MATRIX, ...SPRINT_18_TRACEABILITY_MATRIX, ...SPRINT_19_TRACEABILITY_MATRIX, ...SPRINT_20_TRACEABILITY_MATRIX, ...SPRINT_21_TRACEABILITY_MATRIX, ...SPRINT_22_TRACEABILITY_MATRIX, ...SPRINT_23_TRACEABILITY_MATRIX, ...SPRINT_24_TRACEABILITY_MATRIX, ...SPRINT_25_TRACEABILITY_MATRIX];
+  const matrix = [...SPRINT_1_TRACEABILITY_MATRIX, ...R1_SPRINT_1_TO_14_TRACEABILITY_MATRIX, ...SPRINT_15_TRACEABILITY_MATRIX, ...SPRINT_16_TRACEABILITY_MATRIX, ...SPRINT_17_TRACEABILITY_MATRIX, ...SPRINT_18_TRACEABILITY_MATRIX, ...SPRINT_19_TRACEABILITY_MATRIX, ...SPRINT_20_TRACEABILITY_MATRIX, ...SPRINT_21_TRACEABILITY_MATRIX, ...SPRINT_22_TRACEABILITY_MATRIX, ...SPRINT_23_TRACEABILITY_MATRIX, ...SPRINT_24_TRACEABILITY_MATRIX, ...SPRINT_25_TRACEABILITY_MATRIX, ...SPRINT_26_TRACEABILITY_MATRIX];
   return res.canonicalSuccess({
     total_requirements: matrix.length,
     matrix,
     traceability: matrix,
-    certification_phase: 'R1+S15+S16+S17+S18+S19+S20+S21+S22+S23+S24+S25',
+    certification_phase: 'R1+S15+S16+S17+S18+S19+S20+S21+S22+S23+S24+S25+S26',
   });
 });
 

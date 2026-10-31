@@ -195,7 +195,7 @@ export class MarketplacePaymentRepository{
     const provider=latest?this.getProvider(latest.provider_id):null;
     return {order_id:orderId,commercial_status:commercial,captured_minor:captured,refunded_minor:refunded,net_paid_minor:net,
       currency:String(order.currency),latest_payment_intent_id:latest?.id||null,payment_available:providers>0&&order.status!=='CANCELLED'&&captured<Number(order.total_minor),
-      refund_available:Boolean(provider?.supports_refunds&&captured>refunded),seller_fulfillment_authorized:commercial==='PAID'||commercial==='PARTIALLY_REFUNDED'};
+      refund_available:Boolean(provider?.supports_refunds&&captured>refunded),seller_fulfillment_authorized:commercial==='PAID'};
   }
 
   private mapProvider=(r:any):MarketplacePaymentProvider=>({id:String(r.id),provider_key:String(r.provider_key),display_name:String(r.display_name),
