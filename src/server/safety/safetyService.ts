@@ -96,8 +96,9 @@ export class SafetyService {
       preferences,
       readiness: this.getReadiness(actor),
       execution_capabilities: {
-        sos_activation: false,
-        trusted_contact_notifications: false,
+        sos_activation: true,
+        trusted_contact_notification_orchestration: true,
+        notification_delivery_provider_configured: false,
         trusted_contact_portal: false,
         live_location_streaming: false,
         automatic_escalation: false,
@@ -530,11 +531,11 @@ export class SafetyService {
         contacts_with_phone_count: phoneContacts.length,
         location_sharing_enabled: preferences.allow_location_sharing,
         safety_check_enabled: preferences.safety_check_enabled,
-        sos_engine_active: false,
-        notification_engine_active: false,
+        sos_engine_active: true,
+        notification_engine_active: true,
         trusted_contact_portal_active: false,
         blockers: ['Emergency Circle is disabled by the user.'],
-        notes: ['Configuration readiness is not proof that SOS or notifications are operational.'],
+        notes: ['The SOS engine is operational, but Emergency Circle contact notification is disabled by the user. External assistance is never implied.'],
       };
     }
 
@@ -547,13 +548,14 @@ export class SafetyService {
       contacts_with_phone_count: phoneContacts.length,
       location_sharing_enabled: preferences.allow_location_sharing,
       safety_check_enabled: preferences.safety_check_enabled,
-      sos_engine_active: false,
-      notification_engine_active: false,
+      sos_engine_active: true,
+      notification_engine_active: true,
       trusted_contact_portal_active: false,
       blockers,
       notes: [
-        'Sprint 15 configures human-safety policy only.',
-        'SOS activation, delivery acknowledgements, temporary trusted-contact access and escalation execution are not active yet.',
+        'Sprint 16 provides durable SOS activation and notification-attempt orchestration.',
+        'Notification delivery is only confirmed when a configured provider returns authoritative delivery evidence.',
+        'Trusted-contact web access and automatic escalation remain unavailable until later safety sprints.',
         'Failure to respond must never be treated as proof of injury.',
       ],
     };
