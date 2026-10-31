@@ -133,3 +133,127 @@ export interface CarCareDashboard {
   active_missions: EnrichedVehicleCareMission[];
   safety_statement: string;
 }
+
+
+export type CareUsagePattern =
+  | 'UNKNOWN'
+  | 'OCCASIONAL'
+  | 'DAILY_COMMUTE'
+  | 'MIXED'
+  | 'LONG_DISTANCE'
+  | 'LIGHT_COMMERCIAL';
+
+export type AnnualDistanceBand =
+  | 'UNKNOWN'
+  | 'UNDER_5000_KM'
+  | 'KM_5000_10000'
+  | 'KM_10000_20000'
+  | 'KM_20000_30000'
+  | 'OVER_30000_KM';
+
+export type CareRoadExposure =
+  | 'UNKNOWN'
+  | 'PAVED_MOSTLY'
+  | 'MIXED'
+  | 'ROUGH_ROADS_FREQUENT';
+
+export type CareParkingContext =
+  | 'UNKNOWN'
+  | 'GARAGED'
+  | 'COVERED_OUTDOOR'
+  | 'OUTDOOR_EXPOSED'
+  | 'MIXED';
+
+export type CareClimateExposure =
+  | 'DUSTY'
+  | 'HOT'
+  | 'HUMID'
+  | 'HEAVY_RAIN'
+  | 'COASTAL_SALT'
+  | 'COLD'
+  | 'NONE_REPORTED';
+
+export type CareFrequency = 'UNKNOWN' | 'RARE' | 'OCCASIONAL' | 'MONTHLY' | 'FREQUENT';
+export type HeavyLoadFrequency = 'UNKNOWN' | 'NEVER' | 'OCCASIONAL' | 'FREQUENT';
+
+export interface VehicleCareProfile {
+  id: string;
+  user_id: string;
+  vehicle_id: string;
+  usage_pattern: CareUsagePattern;
+  annual_distance_band: AnnualDistanceBand;
+  road_exposure: CareRoadExposure;
+  parking_context: CareParkingContext;
+  climate_exposures: CareClimateExposure[];
+  long_trip_frequency: CareFrequency;
+  heavy_load_frequency: HeavyLoadFrequency;
+  profile_version: number;
+  source_type: 'OWNER_CONFIGURED';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UpdateVehicleCareProfileInput {
+  usage_pattern?: CareUsagePattern;
+  annual_distance_band?: AnnualDistanceBand;
+  road_exposure?: CareRoadExposure;
+  parking_context?: CareParkingContext;
+  climate_exposures?: CareClimateExposure[];
+  long_trip_frequency?: CareFrequency;
+  heavy_load_frequency?: HeavyLoadFrequency;
+}
+
+export interface PersonalizedCareEvidence {
+  source_type:
+    | 'VEHICLE_SPEC'
+    | 'ODOMETER'
+    | 'OWNER_PROFILE'
+    | 'MAINTENANCE_STATE'
+    | 'VEHICLE_ISSUE'
+    | 'TYRE_INSPECTION'
+    | 'FUEL_EFFICIENCY';
+  label: string;
+  value: string | number | boolean | null;
+  source_reference_id?: string;
+}
+
+export interface PersonalizedCareRecommendation {
+  id: string;
+  rule_id: string;
+  priority: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'INFO';
+  title: string;
+  explanation: string;
+  evidence: PersonalizedCareEvidence[];
+  actions: CareGuidanceAction[];
+  is_diagnosis: false;
+  changes_maintenance_schedule: false;
+  rule_version: string;
+}
+
+export interface PersonalizedCarePlan {
+  vehicle_id: string;
+  generated_at: string;
+  rule_version: string;
+  profile: VehicleCareProfile | null;
+  profile_completeness: 'NOT_CONFIGURED' | 'PARTIAL' | 'CONFIGURED';
+  recommendations: PersonalizedCareRecommendation[];
+  recommended_mission_codes: string[];
+  data_quality_notes: string[];
+  safety_statement: string;
+  location_inference_used: false;
+  ai_inference_used: false;
+}
+
+export interface CarCarePersonalizationEvaluation {
+  id: string;
+  user_id: string;
+  vehicle_id: string;
+  profile_id: string | null;
+  rule_version: string;
+  input_fingerprint: string;
+  recommendation_count: number;
+  recommendations: PersonalizedCareRecommendation[];
+  evidence_summary: Record<string, unknown>;
+  generated_at: string;
+  created_at: string;
+}
