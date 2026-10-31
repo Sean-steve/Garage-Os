@@ -39,7 +39,7 @@ import crypto from 'node:crypto';
 export const componentRouter = Router();
 
 // Middleware: Authenticate actor context (populates req.actor)
-componentRouter.use(authenticate({ optional: true }));
+componentRouter.use(authenticate());
 
 function getActor(req: Request) {
   if (!req.actor) {
