@@ -8,7 +8,8 @@ const nativeFetch = window.fetch.bind(window);
 window.fetch = (input: RequestInfo | URL, init: RequestInit = {}) => {
   const token = sessionStorage.getItem('garage_os_session_token');
   const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
-  if (!token || !url.startsWith('/api/v1/')) {
+  const trustedContactPublicApi = url.startsWith('/api/v1/safety/trusted-contact/');
+  if (!token || !url.startsWith('/api/v1/') || trustedContactPublicApi) {
     return nativeFetch(input, init);
   }
 
