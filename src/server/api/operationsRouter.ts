@@ -45,6 +45,7 @@ import {
 } from '../operations/types';
 import { assertProviderAccess } from '../dispatch/dispatchAuthorization';
 import { operationsRepository } from '../operations/operationsRepository';
+import { getDatabase } from '../database/connection';
 
 export const operationsRouter = Router();
 
@@ -83,6 +84,50 @@ function assertWorkOrderProviderAccess(actor: AuthenticatedActorContext, workOrd
   }
   if (isPrivilegedOperationsActor(actor)) return;
   assertProviderAccess(actor, workOrder.provider_id);
+}
+
+function assertInspectionProviderAccess(actor: AuthenticatedActorContext, inspectionId: string): void {
+  const inspection = operationsRepository.getVehicleInspection(inspectionId);
+  if (!inspection) {
+    throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, 'Inspection not found', 404);
+  }
+  assertServiceCaseProviderAccess(actor, inspection.service_case_id);
+}
+
+function assertWorkOrderItemProviderAccess(actor: AuthenticatedActorContext, itemId: string): void {
+  const item = operationsRepository.getWorkOrderItemById(itemId);
+  if (!item) {
+    throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, 'Work Order Item not found', 404);
+  }
+  assertWorkOrderProviderAccess(actor, item.work_order_id);
+}
+
+function assertWorkSessionProviderAccess(actor: AuthenticatedActorContext, sessionId: string): void {
+  const session = operationsRepository.getTechnicianWorkSession(sessionId);
+  if (!session) {
+    throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, 'Work Session not found', 404);
+  }
+  assertWorkOrderItemProviderAccess(actor, session.work_order_item_id);
+}
+
+function assertPartProviderAccess(actor: AuthenticatedActorContext, partId: string): void {
+  const row = getDatabase()
+    .prepare('SELECT work_order_id FROM work_order_parts WHERE id = ? LIMIT 1')
+    .get(partId) as { work_order_id?: string } | undefined;
+  if (!row?.work_order_id) {
+    throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, 'Work Order Part not found', 404);
+  }
+  assertWorkOrderProviderAccess(actor, row.work_order_id);
+}
+
+function assertHoldProviderAccess(actor: AuthenticatedActorContext, holdId: string): void {
+  const row = getDatabase()
+    .prepare('SELECT work_order_id FROM work_order_holds WHERE id = ? LIMIT 1')
+    .get(holdId) as { work_order_id?: string } | undefined;
+  if (!row?.work_order_id) {
+    throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, 'Work Order Hold not found', 404);
+  }
+  assertWorkOrderProviderAccess(actor, row.work_order_id);
 }
 
 // ---------------- Service Cases ----------------
