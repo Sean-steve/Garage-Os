@@ -20,6 +20,7 @@ import { BentoBookings } from './client/components/BentoBookings';
 import { BentoDomainConsole } from './client/components/BentoDomainConsole';
 import { LoginGate } from './client/components/LoginGate';
 import { BentoSafety } from './client/components/BentoSafety';
+import { TrustedContactPortal } from './client/components/TrustedContactPortal';
 import {
   ActiveTab,
   PlatformCapabilities,
@@ -31,6 +32,11 @@ import {
 } from './client/types';
 
 export default function App() {
+  const trustedContactMode = window.location.pathname === '/trusted-contact';
+  const trustedContactToken = trustedContactMode
+    ? new URLSearchParams(window.location.hash.replace(/^#/, '')).get('token') || ''
+    : '';
+
   const [activeTab, setActiveTab] = useState<ActiveTab>('overview');
   const [sessionToken, setSessionToken] = useState<string | null>(() => sessionStorage.getItem('garage_os_session_token'));
   const [actor, setActor] = useState<any>(null);
@@ -152,6 +158,10 @@ export default function App() {
 
   // Initial authenticated load
   useEffect(() => {
+    if (trustedContactMode) {
+      setLoading(false);
+      return;
+    }
     if (!sessionToken) {
       setLoading(false);
       return;
@@ -285,6 +295,10 @@ export default function App() {
     setSessionToken(null);
     setActor(null);
   };
+
+  if (trustedContactMode) {
+    return <TrustedContactPortal token={trustedContactToken} />;
+  }
 
   if (!sessionToken) {
     return <LoginGate onAuthenticated={setSessionToken} />;

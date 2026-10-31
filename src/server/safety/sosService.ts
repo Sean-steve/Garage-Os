@@ -14,6 +14,7 @@ import { vehicleService } from '../vehicle/vehicleService';
 import { safetyRepository } from './safetyRepository';
 import { sosRepository } from './sosRepository';
 import { getSafetyNotificationAdapter } from './safetyNotificationAdapter';
+import { trustedContactService } from './trustedContactService';
 import {
   EmergencyContact,
   HumanSafetyPreferences,
@@ -265,6 +266,7 @@ export class SosService {
     if (!changed) {
       return this.getAggregateForOwner(actor, incidentId);
     }
+    trustedContactService.revokeIncidentGrants(incidentId, 'SOS_CANCELLED');
     return this.getAggregateForOwner(actor, incidentId);
   }
 
@@ -434,6 +436,8 @@ export class SosService {
       return sosRepository.getNotificationAttempt(attemptId);
     }
 
+    const access = trustedContactService.ensureGrantForNotificationAttempt(attempt);
+
     const attemptedAt = getCurrentUtcIsoString();
     sosRepository.updateNotificationAttempt(attemptId, {
       status: SosNotificationStatus.ATTEMPTED,
@@ -447,7 +451,8 @@ export class SosService {
       destination,
       incident_id: incident.id,
       contact_id: contact.id,
-      message: this.buildNotificationMessage(incident, attempt, contact),
+      portal_url: access.portal_url,
+      message: this.buildNotificationMessage(incident, attempt, contact, access.portal_url),
     });
 
     const now = getCurrentUtcIsoString();
@@ -498,6 +503,16 @@ export class SosService {
         db
       );
     });
+
+    if (
+      status === SosNotificationStatus.FAILED ||
+      status === SosNotificationStatus.NOT_CONFIGURED
+    ) {
+      trustedContactService.revokeGrantForNotificationAttempt(
+        attemptId,
+        `NOTIFICATION_${status}`
+      );
+    }
 
     this.refreshNotificationState(incident.id, now);
     return sosRepository.getNotificationAttempt(attemptId);
@@ -656,6 +671,7 @@ export class SosService {
       );
     });
 
+    trustedContactService.revokeIncidentGrants(incidentId, 'SOS_CLOSED');
     return this.getAggregateForOwner(actor, incidentId);
   }
 
@@ -797,7 +813,8 @@ export class SosService {
   private buildNotificationMessage(
     incident: SosIncident,
     attempt: SosNotificationAttempt,
-    contact: EmergencyContact
+    contact: EmergencyContact,
+    trustedContactPortalUrl: string
   ): string {
     const parts = ['Garage OS safety alert.'];
     if (attempt.share_incident_type) {
@@ -805,7 +822,20 @@ export class SosService {
     }
     if (attempt.share_vehicle_summary && incident.vehicle_id) {
       const row = getDatabase().prepare(
-        'SELECT make, model, registration_number FROM vehicles WHERE id = ? LIMIT 1'
+        `SELECT
+          v.make,
+          v.model,
+          (
+            SELECT vi.value
+            FROM vehicle_identifiers vi
+            WHERE vi.vehicle_id = v.id
+              AND vi.type = 'REGISTRATION_NUMBER'
+            ORDER BY vi.is_primary DESC, vi.created_at DESC
+            LIMIT 1
+          ) AS registration_number
+        FROM vehicles v
+        WHERE v.id = ?
+        LIMIT 1`
       ).get(incident.vehicle_id) as any | undefined;
       if (row) {
         const vehicle = [row.make, row.model, row.registration_number].filter(Boolean).join(' ');
@@ -823,6 +853,7 @@ export class SosService {
       const user = getDatabase().prepare('SELECT phone FROM users WHERE id = ? LIMIT 1').get(incident.user_id) as any | undefined;
       if (user?.phone) parts.push(`Callback: ${user.phone}.`);
     }
+    parts.push(`Trusted contact view: ${trustedContactPortalUrl}`);
     parts.push('If you believe there is immediate danger, contact the appropriate local emergency service directly.');
     return parts.join(' ');
   }

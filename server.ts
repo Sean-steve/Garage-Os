@@ -166,7 +166,7 @@ async function bootstrapServer() {
   app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', config.CORS_ALLOWED_ORIGINS);
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Correlation-Id, Idempotency-Key, X-Actor-Id, X-Actor-Role, X-Organization-Id, X-Session-Token');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Correlation-Id, Idempotency-Key, X-Actor-Id, X-Actor-Role, X-Organization-Id, X-Session-Token, X-Trusted-Contact-Token');
     if (req.method === 'OPTIONS') {
       return res.sendStatus(204);
     }

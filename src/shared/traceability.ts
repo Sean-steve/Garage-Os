@@ -568,3 +568,51 @@ export const SPRINT_16_TRACEABILITY_MATRIX: TraceabilityItem[] = [
     notes: 'Backend acknowledgement, notification provider acceptance/delivery, assistance request/acceptance/arrival and closure remain explicitly separate states. Sprint 16 does not claim external emergency-service dispatch or trusted-contact portal availability.',
   },
 ];
+
+
+/**
+ * Sprint 17 — Trusted Contact Experience (GAR-017).
+ */
+export const SPRINT_17_TRACEABILITY_MATRIX: TraceabilityItem[] = [
+  {
+    requirement_id: 'GAR-DEV-S17',
+    source: 'GAR-017/GAR-032/GAR-035/GAR-036/GAR-039/GAR-040/GAR-049',
+    title: 'Trusted Contact Experience',
+    criticality: 'LAUNCH_CRITICAL',
+    status: 'VERIFIED',
+    implementation_refs: [
+      'src/server/safety/trustedContactRepository.ts',
+      'src/server/safety/trustedContactService.ts',
+      'src/server/api/trustedContactRouter.ts',
+      'src/client/components/TrustedContactPortal.tsx',
+      'src/client/components/BentoSafety.tsx',
+    ],
+    schema_refs: [
+      'trusted_contact_access_grants',
+      'trusted_contact_responses',
+      'trusted_contact_access_audit',
+    ],
+    api_event_refs: [
+      'GET /api/v1/safety/trusted-contact/access',
+      'POST /api/v1/safety/trusted-contact/response',
+      'GET /api/v1/safety/sos/incidents/:id/trusted-contact-access',
+      'POST /api/v1/safety/sos/incidents/:id/trusted-contact-access/revoke',
+      'safety.trusted_contact.access_grant.created',
+      'safety.trusted_contact.access_grant.expired',
+      'safety.trusted_contact.access_grants.revoked',
+      'safety.trusted_contact.response.recorded',
+    ],
+    ui_refs: [
+      'src/client/components/TrustedContactPortal.tsx',
+      'src/client/components/BentoSafety.tsx',
+    ],
+    test_refs: ['tests/integration/trustedContactExperience.test.ts'],
+    ops_refs: [
+      'safety.trusted_contact.access_expiry',
+      'trusted_contact_access_audit',
+      'audit_events',
+      'outbox_events',
+    ],
+    notes: 'Trusted contacts can use no-account, scoped, expiring and revocable links. Portal responses never mutate professional assistance/dispatch state. Automatic escalation remains deferred.',
+  },
+];

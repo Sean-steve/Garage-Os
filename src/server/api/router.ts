@@ -18,7 +18,7 @@ import { storageEngine } from '../storage/storageEngine';
 import { listAuditEvents, recordAuditEvent } from '../security/audit';
 import { featureFlagManager } from '../featureFlags/flags';
 import { metrics } from '../observability/metrics';
-import { SPRINT_1_TRACEABILITY_MATRIX, R1_SPRINT_1_TO_14_TRACEABILITY_MATRIX, SPRINT_15_TRACEABILITY_MATRIX, SPRINT_16_TRACEABILITY_MATRIX } from '../../shared/traceability';
+import { SPRINT_1_TRACEABILITY_MATRIX, R1_SPRINT_1_TO_14_TRACEABILITY_MATRIX, SPRINT_15_TRACEABILITY_MATRIX, SPRINT_16_TRACEABILITY_MATRIX, SPRINT_17_TRACEABILITY_MATRIX } from '../../shared/traceability';
 import { PlatformLifecycleState, CanonicalActorType } from '../../shared/types';
 import { CanonicalAppError, ErrorCode } from '../../shared/errors';
 import { DataProvenanceClass } from '../../shared/provenance';
@@ -39,6 +39,7 @@ import { roadsideRouter } from './roadsideRouter';
 import { towingRouter } from './towingRouter';
 import { dispatchRouter } from '../dispatch/dispatchRouter';
 import { safetyRouter } from './safetyRouter';
+import { trustedContactRouter } from './trustedContactRouter';
 
 export const apiV1Router = Router();
 
@@ -95,7 +96,10 @@ apiV1Router.use(towingRouter);
 // Mount Sprint 14 Real-Time Dispatch, Location & Provider Matching Router (GAR-016)
 apiV1Router.use('/dispatch', dispatchRouter);
 
-// Mount Sprint 15 Emergency Circle & Human Safety Foundation Router (GAR-017)
+// Mount Sprint 17 public Trusted Contact Experience BEFORE the authenticated safety router.
+apiV1Router.use('/safety/trusted-contact', trustedContactRouter);
+
+// Mount Sprint 15-17 Emergency Circle, SOS & Human Safety Router (GAR-017)
 apiV1Router.use('/safety', safetyRouter);
 
 // 1. Platform Capabilities (GAR-002 §8 /v1/platform/capabilities)
@@ -109,12 +113,12 @@ apiV1Router.get('/platform/capabilities', (req: Request, res: Response) => {
 
   const capabilities = {
     platform_name: 'Garage OS',
-    version: '16.0.0-sprint16',
+    version: '17.0.0-sprint17',
     environment: process.env.NODE_ENV || 'development',
     lifecycle_state: PlatformLifecycleState.ACTIVE,
     architecture_baseline: 'GAR-000-to-GAR-051',
-    active_sprint: 'Sprint 16: SOS Engine & Emergency Activation (GAR-017)',
-    next_sprint: 'Sprint 17: Trusted Contact Experience (GAR-017)',
+    active_sprint: 'Sprint 17: Trusted Contact Experience (GAR-017)',
+    next_sprint: 'Sprint 18: Accident Management (GAR-018)',
     constitutional_laws_enforced: 12,
     config: getSanitizedConfig(),
     domains: [
@@ -132,7 +136,7 @@ apiV1Router.get('/platform/capabilities', (req: Request, res: Response) => {
       { id: 'GAR-014', title: 'Roadside Assistance', status: 'ACTIVE_IMPLEMENTED', owner: 'Roadside Domain' },
       { id: 'GAR-015', title: 'Towing & Recovery', status: 'ACTIVE_IMPLEMENTED', owner: 'Towing Domain' },
       { id: 'GAR-016', title: 'Real-Time Dispatch & Matching', status: 'ACTIVE_IMPLEMENTED_R1_HARDENED', owner: 'Dispatch Domain' },
-      { id: 'GAR-017', title: 'SOS & Human Safety Engine', status: 'SOS_ENGINE_IMPLEMENTED_SPRINT_16', owner: 'Safety Domain' },
+      { id: 'GAR-017', title: 'SOS & Human Safety Engine', status: 'TRUSTED_CONTACT_EXPERIENCE_IMPLEMENTED_SPRINT_17', owner: 'Safety Domain' },
     ],
     subsystems: {
       database: {
@@ -172,12 +176,12 @@ apiV1Router.get('/platform/capabilities', (req: Request, res: Response) => {
 
 // 2. Traceability Matrix (GAR-049 §8 /v1/admin/traceability)
 apiV1Router.get('/admin/traceability', authenticate(), requirePlatformAdmin, (req: Request, res: Response) => {
-  const matrix = [...SPRINT_1_TRACEABILITY_MATRIX, ...R1_SPRINT_1_TO_14_TRACEABILITY_MATRIX, ...SPRINT_15_TRACEABILITY_MATRIX, ...SPRINT_16_TRACEABILITY_MATRIX];
+  const matrix = [...SPRINT_1_TRACEABILITY_MATRIX, ...R1_SPRINT_1_TO_14_TRACEABILITY_MATRIX, ...SPRINT_15_TRACEABILITY_MATRIX, ...SPRINT_16_TRACEABILITY_MATRIX, ...SPRINT_17_TRACEABILITY_MATRIX];
   return res.canonicalSuccess({
     total_requirements: matrix.length,
     matrix,
     traceability: matrix,
-    certification_phase: 'R1+S15+S16',
+    certification_phase: 'R1+S15+S16+S17',
   });
 });
 

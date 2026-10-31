@@ -4104,6 +4104,65 @@ export const MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    id: '018_trusted_contact_experience',
+    name: 'Trusted Contact Experience (GAR-017)',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS trusted_contact_access_grants (
+          id TEXT PRIMARY KEY,
+          incident_id TEXT NOT NULL REFERENCES sos_incidents(id) ON DELETE CASCADE,
+          contact_id TEXT NOT NULL REFERENCES emergency_contacts(id) ON DELETE RESTRICT,
+          notification_attempt_id TEXT NOT NULL REFERENCES sos_contact_notification_attempts(id) ON DELETE CASCADE,
+          token_digest TEXT NOT NULL UNIQUE,
+          status TEXT NOT NULL DEFAULT 'ACTIVE',
+          expires_at TEXT NOT NULL,
+          first_accessed_at TEXT,
+          last_accessed_at TEXT,
+          revoked_at TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          UNIQUE(notification_attempt_id),
+          CHECK (status IN ('ACTIVE', 'REVOKED', 'EXPIRED'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_trusted_contact_grants_incident
+          ON trusted_contact_access_grants(incident_id, status, expires_at);
+        CREATE INDEX IF NOT EXISTS idx_trusted_contact_grants_contact
+          ON trusted_contact_access_grants(contact_id, status, expires_at);
+
+        CREATE TABLE IF NOT EXISTS trusted_contact_responses (
+          id TEXT PRIMARY KEY,
+          grant_id TEXT NOT NULL REFERENCES trusted_contact_access_grants(id) ON DELETE CASCADE,
+          incident_id TEXT NOT NULL REFERENCES sos_incidents(id) ON DELETE CASCADE,
+          contact_id TEXT NOT NULL REFERENCES emergency_contacts(id) ON DELETE RESTRICT,
+          response TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          CHECK (response IN ('ACKNOWLEDGED', 'CONTACTING_USER', 'CANNOT_ASSIST'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_trusted_contact_responses_grant
+          ON trusted_contact_responses(grant_id, created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS trusted_contact_access_audit (
+          id TEXT PRIMARY KEY,
+          grant_id TEXT NOT NULL REFERENCES trusted_contact_access_grants(id) ON DELETE CASCADE,
+          incident_id TEXT NOT NULL REFERENCES sos_incidents(id) ON DELETE CASCADE,
+          contact_id TEXT NOT NULL REFERENCES emergency_contacts(id) ON DELETE RESTRICT,
+          action TEXT NOT NULL,
+          metadata_json TEXT,
+          occurred_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_trusted_contact_access_audit_grant
+          ON trusted_contact_access_audit(grant_id, occurred_at DESC);
+      `);
+    },
+    down: (db) => {
+      db.exec(`
+        DROP TABLE IF EXISTS trusted_contact_access_audit;
+        DROP TABLE IF EXISTS trusted_contact_responses;
+        DROP TABLE IF EXISTS trusted_contact_access_grants;
+      `);
+    },
+  },
 ];
 
 /**
