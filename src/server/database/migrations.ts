@@ -5226,11 +5226,164 @@ export const MIGRATIONS: Migration[] = [
         DROP TABLE IF EXISTS marketplace_carts;
       `);
     },
-  }
-];
+  },
+  {
+    id: '026_marketplace_payments_settlement',
+    name: 'Marketplace Payments, Refunds & Settlement Ledger (Sprint 25)',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS marketplace_payment_providers (
+          id TEXT PRIMARY KEY,
+          provider_key TEXT UNIQUE NOT NULL,
+          display_name TEXT NOT NULL,
+          mode TEXT NOT NULL,
+          status TEXT NOT NULL,
+          webhook_secret_env TEXT NOT NULL,
+          supports_refunds INTEGER NOT NULL DEFAULT 0,
+          created_by TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          CHECK (mode IN ('TEST','LIVE')),
+          CHECK (status IN ('ACTIVE','PAUSED','RETIRED')),
+          CHECK (supports_refunds IN (0,1))
+        );
 
-/**
- * Ensures the migration tracking table exists
+        CREATE TABLE IF NOT EXISTS marketplace_payment_intents (
+          id TEXT PRIMARY KEY,
+          order_id TEXT NOT NULL REFERENCES marketplace_orders(id) ON DELETE RESTRICT,
+          provider_id TEXT NOT NULL REFERENCES marketplace_payment_providers(id) ON DELETE RESTRICT,
+          idempotency_key TEXT NOT NULL,
+          provider_payment_id TEXT,
+          client_reference TEXT NOT NULL,
+          amount_minor INTEGER NOT NULL,
+          currency TEXT NOT NULL,
+          status TEXT NOT NULL,
+          failure_code TEXT,
+          failure_message TEXT,
+          created_by TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          UNIQUE(order_id,idempotency_key),
+          UNIQUE(provider_id,provider_payment_id),
+          CHECK (amount_minor > 0),
+          CHECK (length(currency)=3),
+          CHECK (status IN ('PENDING','SUCCEEDED','FAILED','PARTIALLY_REFUNDED','REFUNDED'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_payment_intents_order
+          ON marketplace_payment_intents(order_id,created_at DESC);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_marketplace_payment_one_pending_per_order
+          ON marketplace_payment_intents(order_id) WHERE status='PENDING';
+
+        CREATE TABLE IF NOT EXISTS marketplace_refunds (
+          id TEXT PRIMARY KEY,
+          order_id TEXT NOT NULL REFERENCES marketplace_orders(id) ON DELETE RESTRICT,
+          payment_intent_id TEXT NOT NULL REFERENCES marketplace_payment_intents(id) ON DELETE RESTRICT,
+          idempotency_key TEXT NOT NULL,
+          provider_refund_id TEXT,
+          amount_minor INTEGER NOT NULL,
+          currency TEXT NOT NULL,
+          reason TEXT NOT NULL,
+          status TEXT NOT NULL,
+          requested_by TEXT NOT NULL,
+          requested_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          UNIQUE(order_id,idempotency_key),
+          UNIQUE(payment_intent_id,provider_refund_id),
+          CHECK (amount_minor > 0),
+          CHECK (length(currency)=3),
+          CHECK (status IN ('REQUESTED','PENDING','SUCCEEDED','FAILED'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_refunds_order
+          ON marketplace_refunds(order_id,requested_at DESC);
+
+        CREATE TABLE IF NOT EXISTS marketplace_payment_provider_events (
+          id TEXT PRIMARY KEY,
+          provider_id TEXT NOT NULL REFERENCES marketplace_payment_providers(id) ON DELETE RESTRICT,
+          provider_event_id TEXT NOT NULL,
+          event_type TEXT NOT NULL,
+          payment_intent_id TEXT REFERENCES marketplace_payment_intents(id) ON DELETE SET NULL,
+          refund_id TEXT REFERENCES marketplace_refunds(id) ON DELETE SET NULL,
+          signature_verified INTEGER NOT NULL,
+          payload_hash TEXT NOT NULL,
+          processing_status TEXT NOT NULL,
+          processing_message TEXT,
+          occurred_at TEXT NOT NULL,
+          processed_at TEXT NOT NULL,
+          UNIQUE(provider_id,provider_event_id),
+          CHECK (event_type IN ('PAYMENT_PENDING','PAYMENT_SUCCEEDED','PAYMENT_FAILED','REFUND_PENDING','REFUND_SUCCEEDED','REFUND_FAILED')),
+          CHECK (signature_verified IN (0,1)),
+          CHECK (processing_status IN ('PROCESSED','IGNORED','REJECTED'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_provider_events_payment
+          ON marketplace_payment_provider_events(payment_intent_id,processed_at DESC);
+
+        CREATE TABLE IF NOT EXISTS marketplace_inventory_commitments (
+          id TEXT PRIMARY KEY,
+          reservation_id TEXT UNIQUE NOT NULL REFERENCES marketplace_inventory_reservations(id) ON DELETE RESTRICT,
+          order_id TEXT NOT NULL REFERENCES marketplace_orders(id) ON DELETE RESTRICT,
+          payment_intent_id TEXT NOT NULL REFERENCES marketplace_payment_intents(id) ON DELETE RESTRICT,
+          committed_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_inventory_commitments_order
+          ON marketplace_inventory_commitments(order_id);
+
+        CREATE TABLE IF NOT EXISTS marketplace_settlement_ledger_entries (
+          id TEXT PRIMARY KEY,
+          store_id TEXT NOT NULL REFERENCES marketplace_stores(id) ON DELETE RESTRICT,
+          order_id TEXT NOT NULL REFERENCES marketplace_orders(id) ON DELETE RESTRICT,
+          payment_intent_id TEXT NOT NULL REFERENCES marketplace_payment_intents(id) ON DELETE RESTRICT,
+          refund_id TEXT REFERENCES marketplace_refunds(id) ON DELETE RESTRICT,
+          entry_type TEXT NOT NULL,
+          amount_minor INTEGER NOT NULL,
+          currency TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          CHECK (entry_type IN ('PAYMENT_CAPTURE','REFUND_ADJUSTMENT')),
+          CHECK (length(currency)=3),
+          CHECK (
+            (entry_type='PAYMENT_CAPTURE' AND amount_minor > 0 AND refund_id IS NULL)
+            OR
+            (entry_type='REFUND_ADJUSTMENT' AND amount_minor < 0 AND refund_id IS NOT NULL)
+          )
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_marketplace_settlement_capture_once
+          ON marketplace_settlement_ledger_entries(payment_intent_id,entry_type)
+          WHERE entry_type='PAYMENT_CAPTURE';
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_marketplace_settlement_refund_once
+          ON marketplace_settlement_ledger_entries(refund_id,entry_type)
+          WHERE refund_id IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS idx_marketplace_settlement_store
+          ON marketplace_settlement_ledger_entries(store_id,currency,created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS marketplace_payment_reconciliation_issues (
+          id TEXT PRIMARY KEY,
+          provider_id TEXT NOT NULL REFERENCES marketplace_payment_providers(id) ON DELETE RESTRICT,
+          provider_event_id TEXT NOT NULL,
+          order_id TEXT,
+          payment_intent_id TEXT REFERENCES marketplace_payment_intents(id) ON DELETE SET NULL,
+          issue_type TEXT NOT NULL,
+          details TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'OPEN',
+          created_at TEXT NOT NULL,
+          resolved_at TEXT,
+          CHECK (status IN ('OPEN','RESOLVED'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_payment_reconciliation_status
+          ON marketplace_payment_reconciliation_issues(status,created_at DESC);
+      `);
+    },
+    down: (db) => {
+      db.exec(`
+        DROP TABLE IF EXISTS marketplace_payment_reconciliation_issues;
+        DROP TABLE IF EXISTS marketplace_settlement_ledger_entries;
+        DROP TABLE IF EXISTS marketplace_inventory_commitments;
+        DROP TABLE IF EXISTS marketplace_payment_provider_events;
+        DROP TABLE IF EXISTS marketplace_refunds;
+        DROP TABLE IF EXISTS marketplace_payment_intents;
+        DROP TABLE IF EXISTS marketplace_payment_providers;
+      `);
+    },
+  }
+];\n\n/**\n * Ensures the migration tracking table exists
  */
 function ensureMigrationTable(db: DatabaseSync): void {
   db.exec(`
