@@ -146,7 +146,7 @@ export class TripGuardianRepository {
     const r=getDatabase().prepare(`
       UPDATE trip_guardian_checkins
       SET prompted_at=COALESCE(prompted_at,?),updated_at=?
-      WHERE id=? AND status='PENDING' AND due_at<=?
+      WHERE id=? AND status='PENDING' AND due_at<=? AND prompted_at IS NULL
     `).run(asOf,asOf,id,asOf);
     return Number(r.changes||0)===1;
   }
