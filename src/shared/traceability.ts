@@ -670,3 +670,46 @@ export const SPRINT_18_TRACEABILITY_MATRIX: TraceabilityItem[] = [
     notes: 'Accident Passport projection is deliberately minimum-necessary and excludes participants, witnesses, exact location, injury reports, external reference numbers and raw evidence. Police/insurance integrations remain adapters for later sprints.',
   },
 ];
+
+
+/**
+ * Sprint 19 — Car Care Center (GAR-020).
+ */
+export const SPRINT_19_TRACEABILITY_MATRIX: TraceabilityItem[] = [
+  {
+    requirement_id: 'GAR-DEV-S19',
+    source: 'GAR-020/GAR-006/GAR-008/GAR-014/GAR-013/GAR-035/GAR-039/GAR-040/GAR-049',
+    title: 'Car Care Center',
+    criticality: 'LAUNCH_CRITICAL',
+    status: 'IMPLEMENTED',
+    implementation_refs: [
+      'src/server/carCare/types.ts',
+      'src/server/carCare/carCareRepository.ts',
+      'src/server/carCare/carCareService.ts',
+      'src/server/api/carCareRouter.ts',
+      'src/client/components/BentoCarCare.tsx',
+    ],
+    schema_refs: [
+      'car_care_articles',
+      'car_care_mission_templates',
+      'car_care_mission_items',
+      'vehicle_care_missions',
+      'vehicle_care_mission_item_progress',
+    ],
+    api_event_refs: [
+      'GET /api/v1/car-care/articles',
+      'GET /api/v1/car-care/articles/:slug',
+      'GET /api/v1/vehicles/:id/car-care/dashboard',
+      'GET/POST /api/v1/vehicles/:id/car-care/missions',
+      'GET /api/v1/vehicles/:id/car-care/missions/:missionId',
+      'POST /api/v1/vehicles/:id/car-care/missions/:missionId/items/:itemId/progress',
+      'car_care.mission.started',
+      'car_care.mission.item.updated',
+      'car_care.mission.completed',
+    ],
+    ui_refs: ['src/client/components/BentoCarCare.tsx'],
+    test_refs: ['tests/integration/carCareCenterArchitecture.test.ts'],
+    ops_refs: ['audit_events', 'outbox_events'],
+    notes: 'Car Care is an education and routing layer over authoritative maintenance/issue state. Guidance cards explicitly state is_diagnosis=false. Owner mission completion is not professional inspection or safety certification.',
+  },
+];
