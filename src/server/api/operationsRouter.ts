@@ -412,6 +412,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertWorkOrderProviderAccess(actor, req.params.id);
       assertAuthorized(actor, CanonicalPermission.WORK_ORDER_MANAGE);
       const dto: AssignTechnicianDto = {
         ...req.body,
@@ -431,6 +432,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertWorkOrderItemProviderAccess(actor, req.body.work_order_item_id);
       const dto: StartLaborSessionDto = req.body;
       const session = garageOperationsService.startLaborSession(actor, dto);
       res.status(201).json({ success: true, data: session });
@@ -446,6 +448,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertWorkSessionProviderAccess(actor, req.body.session_id);
       const dto: EndLaborSessionDto = req.body;
       const session = garageOperationsService.endLaborSession(actor, dto);
       res.json({ success: true, data: session });
@@ -461,6 +464,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertWorkOrderProviderAccess(actor, req.params.id);
       const dto: AddWorkOrderPartDto = {
         ...req.body,
         work_order_id: req.params.id,
@@ -479,6 +483,7 @@ operationsRouter.patch(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertPartProviderAccess(actor, req.params.id);
       const { status, replaced_component_id, vehicle_component_id } = req.body;
       garageOperationsService.updateWorkOrderPartStatus(actor, req.params.id, status, {
         replaced_component_id,
@@ -497,6 +502,7 @@ operationsRouter.patch(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertWorkOrderItemProviderAccess(actor, req.params.id);
       const { status, block_reason } = req.body;
       garageOperationsService.updateWorkOrderItemStatus(actor, req.params.id, status, block_reason);
       res.json({ success: true, message: 'Work order item status updated' });
@@ -512,6 +518,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertWorkOrderProviderAccess(actor, req.params.id);
       const { reason, description } = req.body;
       const hold = garageOperationsService.placeWorkOrderHold(actor, req.params.id, reason, description);
       res.status(201).json({ success: true, data: hold });
@@ -527,6 +534,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertHoldProviderAccess(actor, req.params.id);
       garageOperationsService.releaseWorkOrderHold(actor, req.params.id);
       res.json({ success: true, message: 'Work order hold released' });
     } catch (err) {
@@ -543,6 +551,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertWorkOrderProviderAccess(actor, req.params.id);
       assertAuthorized(actor, CanonicalPermission.QUALITY_CONTROL_PERFORM);
       const dto: PerformQcCheckDto = {
         ...req.body,
@@ -562,6 +571,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertWorkOrderProviderAccess(actor, req.params.id);
       const dto: PerformRoadTestDto = {
         ...req.body,
         work_order_id: req.params.id,
