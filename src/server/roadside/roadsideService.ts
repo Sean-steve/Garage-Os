@@ -514,10 +514,22 @@ export class RoadsideService {
     }
 
     const triage = roadsideRepository.getLatestTriageRecord(incidentId);
+    if (!triage) {
+      throw new CanonicalAppError(
+        ErrorCode.ROADSIDE_TRIAGE_REQUIRED,
+        'Roadside triage must be completed before assistance can be requested'
+      );
+    }
+    if (triage.safety_escalation_required) {
+      throw new CanonicalAppError(
+        ErrorCode.ROADSIDE_EMERGENCY_ROUTE_REQUIRED,
+        'Immediate safety escalation is required before ordinary roadside dispatch'
+      );
+    }
+
     const assistanceType =
       params?.requested_assistance_type ||
-      triage?.recommended_assistance_type ||
-      AssistanceType.ROADSIDE_MOBILE_REPAIR;
+      triage.recommended_assistance_type;
 
     const radiusKm = params?.search_radius_km || 35.0;
     const now = getCurrentUtcIsoString();
