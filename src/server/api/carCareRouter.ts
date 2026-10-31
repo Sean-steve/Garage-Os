@@ -49,3 +49,40 @@ carCareRouter.post('/vehicles/:id/car-care/missions/:missionId/items/:itemId/pro
     ));
   }catch(err){next(err);}
 });
+
+
+carCareRouter.get('/vehicles/:id/car-care/profile', (req:Request,res:Response,next:NextFunction)=>{
+  try{
+    res.canonicalSuccess({profile:carCareService.getCareProfile(req.actor!,req.params.id)});
+  }catch(err){next(err);}
+});
+
+carCareRouter.patch('/vehicles/:id/car-care/profile', (req:Request,res:Response,next:NextFunction)=>{
+  try{
+    const forbidden=['location','latitude','longitude','coordinates','gps','address','city'];
+    const supplied=Object.keys(req.body||{}).filter(k=>forbidden.includes(k.toLowerCase()));
+    if(supplied.length>0){
+      throw new Error('Car Care profile does not accept precise location fields; use explicit exposure categories instead');
+    }
+    res.canonicalSuccess({profile:carCareService.updateCareProfile(req.actor!,req.params.id,req.body||{})});
+  }catch(err){next(err);}
+});
+
+carCareRouter.get('/vehicles/:id/car-care/personalized', (req:Request,res:Response,next:NextFunction)=>{
+  try{
+    res.canonicalSuccess(carCareService.getPersonalizedPlan(req.actor!,req.params.id,false));
+  }catch(err){next(err);}
+});
+
+carCareRouter.post('/vehicles/:id/car-care/personalized/evaluate', (req:Request,res:Response,next:NextFunction)=>{
+  try{
+    res.canonicalSuccess(carCareService.getPersonalizedPlan(req.actor!,req.params.id,true));
+  }catch(err){next(err);}
+});
+
+carCareRouter.get('/vehicles/:id/car-care/personalized/evaluations', (req:Request,res:Response,next:NextFunction)=>{
+  try{
+    const limit=Math.max(1,Math.min(50,Number(req.query.limit)||10));
+    res.canonicalSuccess({evaluations:carCareService.listPersonalizationEvaluations(req.actor!,req.params.id,limit)});
+  }catch(err){next(err);}
+});
