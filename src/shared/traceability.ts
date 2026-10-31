@@ -627,7 +627,7 @@ export const SPRINT_18_TRACEABILITY_MATRIX: TraceabilityItem[] = [
     source: 'GAR-018/GAR-005/GAR-014/GAR-015/GAR-038/GAR-039/GAR-040/GAR-049',
     title: 'Accident Management',
     criticality: 'LAUNCH_CRITICAL',
-    status: 'IMPLEMENTED',
+    status: 'VERIFIED',
     implementation_refs: [
       'src/server/accident/types.ts',
       'src/server/accident/accidentRepository.ts',
