@@ -6,6 +6,7 @@ import { Router, Request, Response } from 'express';
 import { authenticate } from './authMiddleware';
 import { maintenanceService } from '../maintenance/maintenanceService';
 import { maintenanceRepository } from '../maintenance/maintenanceRepository';
+import { vehicleService } from '../vehicle/vehicleService';
 import { MaintenanceCategory } from '../maintenance/types';
 import { CanonicalAppError, ErrorCode } from '../../shared/errors';
 import { logger } from '../observability/logger';
@@ -13,7 +14,15 @@ import { logger } from '../observability/logger';
 export const maintenanceRouter = Router();
 
 // Middleware: Authenticate for all endpoints (optional for read, fallback actor in dev)
-maintenanceRouter.use(authenticate({ optional: true }));
+maintenanceRouter.use(authenticate());
+maintenanceRouter.use('/vehicles/:id', (req, _res, next) => {
+  try {
+    vehicleService.getVehicleDetails(req.actor!, req.params.id);
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
 
 /**
  * 1. GET /api/v1/vehicles/:id/maintenance/status
@@ -84,7 +93,7 @@ maintenanceRouter.get('/vehicles/:id/maintenance/plan', (req: Request, res: Resp
 maintenanceRouter.post('/vehicles/:id/maintenance/plan/entries', (req: Request, res: Response) => {
   try {
     const vehicleId = req.params.id;
-    const actorId = req.actor?.user_id || 'usr_seed_owner_01';
+    const actorId = req.actor!.user_id;
     const { requirement_id, custom_distance_interval, custom_time_interval_value, custom_time_interval_unit, priority_override, notes } = req.body;
 
     if (!requirement_id) {
@@ -126,7 +135,7 @@ maintenanceRouter.patch('/vehicles/:id/maintenance/plan/entries/:entryId', (req:
   try {
     const vehicleId = req.params.id;
     const entryId = req.params.entryId;
-    const actorId = req.actor?.user_id || 'usr_seed_owner_01';
+    const actorId = req.actor!.user_id;
     const { enabled, custom_distance_interval, custom_time_interval_value, custom_time_interval_unit, priority_override, notes } = req.body;
 
     maintenanceService.updatePlanEntry(
@@ -164,7 +173,7 @@ maintenanceRouter.patch('/vehicles/:id/maintenance/plan/entries/:entryId', (req:
 maintenanceRouter.post('/vehicles/:id/maintenance/complete', (req: Request, res: Response) => {
   try {
     const vehicleId = req.params.id;
-    const actorId = req.actor?.user_id || 'usr_seed_owner_01';
+    const actorId = req.actor!.user_id;
     const {
       requirement_id,
       cycle_id,
@@ -238,7 +247,7 @@ maintenanceRouter.post('/vehicles/:id/maintenance/complete', (req: Request, res:
 maintenanceRouter.post('/vehicles/:id/maintenance/defer', (req: Request, res: Response) => {
   try {
     const vehicleId = req.params.id;
-    const actorId = req.actor?.user_id || 'usr_seed_owner_01';
+    const actorId = req.actor!.user_id;
     const { cycle_id, reason, deferred_until_date, deferred_until_distance_km } = req.body;
 
     if (!cycle_id) {
