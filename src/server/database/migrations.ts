@@ -5082,6 +5082,150 @@ export const MIGRATIONS: Migration[] = [
         DROP TABLE IF EXISTS marketplace_fitment_sources;
       `);
     },
+  },
+  {
+    id: '025_marketplace_transactions_orders',
+    name: 'Marketplace Transactions, Carts & Orders (Sprint 24)',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS marketplace_carts (
+          id TEXT PRIMARY KEY,
+          buyer_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          store_id TEXT NOT NULL REFERENCES marketplace_stores(id) ON DELETE RESTRICT,
+          vehicle_id TEXT REFERENCES vehicles(id) ON DELETE SET NULL,
+          currency TEXT,
+          status TEXT NOT NULL DEFAULT 'ACTIVE',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          CHECK (currency IS NULL OR length(currency)=3),
+          CHECK (status IN ('ACTIVE','CHECKED_OUT','ABANDONED'))
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_marketplace_active_cart
+          ON marketplace_carts(buyer_user_id,store_id) WHERE status='ACTIVE';
+        CREATE INDEX IF NOT EXISTS idx_marketplace_carts_buyer
+          ON marketplace_carts(buyer_user_id,status,updated_at DESC);
+
+        CREATE TABLE IF NOT EXISTS marketplace_cart_items (
+          id TEXT PRIMARY KEY,
+          cart_id TEXT NOT NULL REFERENCES marketplace_carts(id) ON DELETE CASCADE,
+          listing_id TEXT NOT NULL REFERENCES marketplace_listings(id) ON DELETE RESTRICT,
+          product_id TEXT NOT NULL REFERENCES marketplace_products(id) ON DELETE RESTRICT,
+          quantity INTEGER NOT NULL,
+          unit_price_minor_snapshot INTEGER NOT NULL,
+          currency TEXT NOT NULL,
+          listing_version_snapshot INTEGER NOT NULL,
+          title_snapshot TEXT NOT NULL,
+          added_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          UNIQUE(cart_id,listing_id),
+          CHECK (quantity BETWEEN 1 AND 999),
+          CHECK (unit_price_minor_snapshot >= 0),
+          CHECK (length(currency)=3),
+          CHECK (listing_version_snapshot >= 1)
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_cart_items_cart
+          ON marketplace_cart_items(cart_id,added_at);
+
+        CREATE TABLE IF NOT EXISTS marketplace_orders (
+          id TEXT PRIMARY KEY,
+          order_number TEXT UNIQUE NOT NULL,
+          buyer_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          store_id TEXT NOT NULL REFERENCES marketplace_stores(id) ON DELETE RESTRICT,
+          vehicle_id TEXT REFERENCES vehicles(id) ON DELETE SET NULL,
+          cart_id TEXT UNIQUE NOT NULL REFERENCES marketplace_carts(id) ON DELETE RESTRICT,
+          status TEXT NOT NULL,
+          payment_status TEXT NOT NULL,
+          currency TEXT NOT NULL,
+          subtotal_minor INTEGER NOT NULL,
+          total_minor INTEGER NOT NULL,
+          fulfillment_mode TEXT NOT NULL,
+          delivery_name TEXT,
+          delivery_phone TEXT,
+          delivery_address_json TEXT,
+          fitment_acknowledged INTEGER NOT NULL DEFAULT 0,
+          fitment_acknowledgement_text TEXT,
+          placed_at TEXT NOT NULL,
+          cancelled_at TEXT,
+          cancellation_reason TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          CHECK (status IN ('AWAITING_PAYMENT','CANCELLED')),
+          CHECK (payment_status IN ('NOT_STARTED','PENDING')),
+          CHECK (length(currency)=3),
+          CHECK (subtotal_minor >= 0),
+          CHECK (total_minor >= subtotal_minor),
+          CHECK (fulfillment_mode IN ('PICKUP','LOCAL_DELIVERY','SHIPPING')),
+          CHECK (fitment_acknowledged IN (0,1))
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_orders_buyer
+          ON marketplace_orders(buyer_user_id,status,placed_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_marketplace_orders_store
+          ON marketplace_orders(store_id,status,placed_at DESC);
+
+        CREATE TABLE IF NOT EXISTS marketplace_order_items (
+          id TEXT PRIMARY KEY,
+          order_id TEXT NOT NULL REFERENCES marketplace_orders(id) ON DELETE CASCADE,
+          listing_id TEXT NOT NULL REFERENCES marketplace_listings(id) ON DELETE RESTRICT,
+          product_id TEXT NOT NULL REFERENCES marketplace_products(id) ON DELETE RESTRICT,
+          seller_sku TEXT NOT NULL,
+          title TEXT NOT NULL,
+          quantity INTEGER NOT NULL,
+          unit_price_minor INTEGER NOT NULL,
+          line_total_minor INTEGER NOT NULL,
+          currency TEXT NOT NULL,
+          listing_version INTEGER NOT NULL,
+          fitment_status TEXT,
+          fitment_confidence INTEGER,
+          fitment_decision_id TEXT REFERENCES marketplace_fitment_decisions(id) ON DELETE SET NULL,
+          created_at TEXT NOT NULL,
+          CHECK (quantity BETWEEN 1 AND 999),
+          CHECK (unit_price_minor >= 0),
+          CHECK (line_total_minor = unit_price_minor * quantity),
+          CHECK (length(currency)=3),
+          CHECK (fitment_confidence IS NULL OR fitment_confidence BETWEEN 0 AND 100)
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_order_items_order
+          ON marketplace_order_items(order_id);
+
+        CREATE TABLE IF NOT EXISTS marketplace_inventory_reservations (
+          id TEXT PRIMARY KEY,
+          order_id TEXT NOT NULL REFERENCES marketplace_orders(id) ON DELETE CASCADE,
+          listing_id TEXT NOT NULL REFERENCES marketplace_listings(id) ON DELETE RESTRICT,
+          quantity INTEGER NOT NULL,
+          status TEXT NOT NULL,
+          held_at TEXT NOT NULL,
+          released_at TEXT,
+          UNIQUE(order_id,listing_id),
+          CHECK (quantity BETWEEN 1 AND 999),
+          CHECK (status IN ('HELD','RELEASED'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_inventory_reservations_listing
+          ON marketplace_inventory_reservations(listing_id,status);
+
+        CREATE TABLE IF NOT EXISTS marketplace_order_status_history (
+          id TEXT PRIMARY KEY,
+          order_id TEXT NOT NULL REFERENCES marketplace_orders(id) ON DELETE CASCADE,
+          from_status TEXT,
+          to_status TEXT NOT NULL,
+          actor_id TEXT NOT NULL,
+          actor_type TEXT NOT NULL,
+          reason TEXT,
+          occurred_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_order_history
+          ON marketplace_order_status_history(order_id,occurred_at);
+      `);
+    },
+    down: (db) => {
+      db.exec(`
+        DROP TABLE IF EXISTS marketplace_order_status_history;
+        DROP TABLE IF EXISTS marketplace_inventory_reservations;
+        DROP TABLE IF EXISTS marketplace_order_items;
+        DROP TABLE IF EXISTS marketplace_orders;
+        DROP TABLE IF EXISTS marketplace_cart_items;
+        DROP TABLE IF EXISTS marketplace_carts;
+      `);
+    },
   }
 ];
 
