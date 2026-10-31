@@ -88,7 +88,10 @@ export class TripGuardianService {
     this.assertLocationSharingAllowed(actor,locationSharing);
 
     const contactIds=this.normalizeContactIds(actor,input.contact_ids||[]);
+    const existingPretrip=carCareService.listMissions(actor,input.vehicle_id)
+      .find(m=>m.mission.status==='ACTIVE'&&m.template.code==='PRE_TRIP_CHECK');
     const pretrip=carCareService.startMission(actor,input.vehicle_id,'PRE_TRIP_CHECK');
+    const pretripCreatedForJourney=!existingPretrip;
     const now=getCurrentUtcIsoString();
     const journey:TripGuardianJourney={
       id:generateCanonicalId('tgj'),
@@ -151,7 +154,9 @@ export class TripGuardianService {
         },db);
       });
     }catch(err){
-      carCareService.cancelMission(actor,input.vehicle_id,pretrip.mission.id,'TRIP_GUARDIAN_CREATE_FAILED');
+      if(pretripCreatedForJourney){
+        carCareService.cancelMission(actor,input.vehicle_id,pretrip.mission.id,'TRIP_GUARDIAN_CREATE_FAILED');
+      }
       throw err;
     }
 
