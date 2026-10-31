@@ -42,6 +42,7 @@ import { safetyRouter } from './safetyRouter';
 import { trustedContactRouter } from './trustedContactRouter';
 import { accidentRouter } from './accidentRouter';
 import { carCareRouter } from './carCareRouter';
+import { tripGuardianRouter } from './tripGuardianRouter';
 
 export const apiV1Router = Router();
 
@@ -107,8 +108,11 @@ apiV1Router.use('/safety', safetyRouter);
 // Mount Sprint 18 Accident Management Router (GAR-018)
 apiV1Router.use(accidentRouter);
 
-// Mount Sprint 19 Car Care Center Router (GAR-020)
+// Mount Sprint 19-20 Car Care Router (GAR-020)
 apiV1Router.use(carCareRouter);
+
+// Mount Sprint 21 Pre-Trip & Trip Guardian Router (GAR-019)
+apiV1Router.use(tripGuardianRouter);
 
 // 1. Platform Capabilities (GAR-002 §8 /v1/platform/capabilities)
 apiV1Router.get('/platform/capabilities', (req: Request, res: Response) => {
