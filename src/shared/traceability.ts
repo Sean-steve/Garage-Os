@@ -762,7 +762,7 @@ export const SPRINT_21_TRACEABILITY_MATRIX: TraceabilityItem[] = [
     source: 'GAR-019/GAR-004/GAR-006/GAR-008/GAR-017/GAR-020/GAR-035/GAR-039/GAR-040/GAR-049',
     title: 'Pre-Trip & Trip Guardian Foundation',
     criticality: 'LAUNCH_CRITICAL',
-    status: 'IMPLEMENTED',
+    status: 'VERIFIED',
     implementation_refs: [
       'src/server/tripGuardian/types.ts',
       'src/server/tripGuardian/tripGuardianRepository.ts',
