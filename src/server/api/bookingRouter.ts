@@ -31,64 +31,16 @@ export const bookingRouter = Router();
 bookingRouter.use(authenticate({ optional: true }));
 
 function getActor(req: Request): AuthenticatedActorContext & { actor_id: string; roles: string[] } {
-  if (req.actor) {
-    const roles: string[] = [];
-    if (req.actor.active_membership?.role) {
-      roles.push(req.actor.active_membership.role);
-    }
-    if (req.actor.platform_roles) {
-      roles.push(...req.actor.platform_roles);
-    }
-    return {
-      ...req.actor,
-      actor_id: req.actor.user_id || req.actor.id,
-      roles,
-    };
+  if (!req.actor) {
+    throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Authentication required', 401);
   }
-
-  // Fallback dev context (Customer / Member default)
+  const roles: string[] = [];
+  if (req.actor.active_membership?.role) roles.push(req.actor.active_membership.role);
+  if (req.actor.platform_roles) roles.push(...req.actor.platform_roles);
   return {
-    id: 'usr_dev_customer_01',
-    user_id: 'usr_dev_customer_01',
-    actor_id: 'usr_dev_customer_01',
-    session_id: 'sess_dev_cust_01',
-    email: 'customer@garage-os.local',
-    account_status: AccountStatus.ACTIVE,
-    platform_roles: [],
-    profile: {
-      user_id: 'usr_dev_customer_01',
-      display_name: 'Dev Customer',
-      first_name: 'Dev',
-      last_name: 'Customer',
-      preferred_language: 'en',
-      timezone: 'Africa/Nairobi',
-      country: 'KE',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    memberships: [
-      {
-        membership_id: 'mem_dev_cust_01',
-        organization_id: 'org_dev_cust_01',
-        organization_name: 'Customer Org',
-        organization_type: OrganizationType.GARAGE,
-        organization_status: OrganizationStatus.ACTIVE,
-        role: MembershipRole.OWNER,
-        status: MembershipStatus.ACTIVE,
-      },
-    ],
-    active_organization_id: 'org_dev_cust_01',
-    active_membership: {
-      membership_id: 'mem_dev_cust_01',
-      organization_id: 'org_dev_cust_01',
-      organization_name: 'Customer Org',
-      organization_type: OrganizationType.GARAGE,
-      organization_status: OrganizationStatus.ACTIVE,
-      role: MembershipRole.OWNER,
-      status: MembershipStatus.ACTIVE,
-      permissions: [],
-    },
-    roles: [MembershipRole.OWNER],
+    ...req.actor,
+    actor_id: req.actor.user_id || req.actor.id,
+    roles,
   };
 }
 
