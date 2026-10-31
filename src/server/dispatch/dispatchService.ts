@@ -249,8 +249,14 @@ export class DispatchService {
           sourceRequestId: request.source_reference_id,
           candidate,
           attemptId,
-          etaMinutes: candidate.eta_seconds ? Math.round(candidate.eta_seconds / 60) : 25,
-          distanceKm: candidate.distance_meters ? Math.round((candidate.distance_meters / 1000) * 10) / 10 : 5.0,
+          etaMinutes:
+            candidate.eta_seconds != null
+              ? Math.round(candidate.eta_seconds / 60)
+              : undefined,
+          distanceKm:
+            candidate.distance_meters != null
+              ? Math.round((candidate.distance_meters / 1000) * 10) / 10
+              : undefined,
         });
 
         // Notify specific provider/responder
