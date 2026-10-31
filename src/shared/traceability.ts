@@ -513,3 +513,58 @@ export const SPRINT_15_TRACEABILITY_MATRIX: TraceabilityItem[] = [
     notes: 'Sprint 15 configures trusted contacts and safety policy. SOS activation, notification delivery, temporary trusted-contact access, and automatic escalation remain intentionally unavailable until Sprint 16/17.',
   },
 ];
+
+
+/**
+ * Sprint 16 — SOS Engine & Emergency Activation (GAR-017).
+ */
+export const SPRINT_16_TRACEABILITY_MATRIX: TraceabilityItem[] = [
+  {
+    requirement_id: 'GAR-DEV-S16',
+    source: 'GAR-017/GAR-032/GAR-035/GAR-036/GAR-039/GAR-040/GAR-049',
+    title: 'SOS Engine & Emergency Activation',
+    criticality: 'LAUNCH_CRITICAL',
+    status: 'IMPLEMENTED',
+    implementation_refs: [
+      'src/server/safety/sosRepository.ts',
+      'src/server/safety/sosService.ts',
+      'src/server/safety/safetyNotificationAdapter.ts',
+      'src/server/jobs/safetyJob.ts',
+      'src/server/api/safetyRouter.ts',
+    ],
+    schema_refs: [
+      'sos_incidents',
+      'sos_activation_attempts',
+      'sos_location_snapshots',
+      'sos_contact_notification_attempts',
+      'sos_safety_checks',
+      'sos_status_history',
+    ],
+    api_event_refs: [
+      'POST /api/v1/safety/sos/attempts',
+      'GET /api/v1/safety/sos/active',
+      'GET /api/v1/safety/sos/incidents/:id',
+      'POST /api/v1/safety/sos/incidents/:id/cancel',
+      'POST /api/v1/safety/sos/incidents/:id/safety-check-response',
+      'POST /api/v1/safety/sos/incidents/:id/close',
+      'safety.sos.activation_attempt.acknowledged',
+      'safety.sos.activated',
+      'safety.sos.cancelled',
+      'safety.sos.notification.*',
+      'safety.sos.safety_check.responded',
+      'safety.sos.safety_check.timed_out',
+      'safety.sos.closed',
+    ],
+    ui_refs: ['src/client/components/BentoSafety.tsx'],
+    test_refs: ['tests/integration/sosEngineArchitecture.test.ts'],
+    ops_refs: [
+      'safety.sos.finalize_activation',
+      'safety.sos.notification_attempt',
+      'safety.sos.safety_check_timeout',
+      'safety.sos.location_retention',
+      'audit_events',
+      'outbox_events',
+    ],
+    notes: 'Backend acknowledgement, notification provider acceptance/delivery, assistance request/acceptance/arrival and closure remain explicitly separate states. Sprint 16 does not claim external emergency-service dispatch or trusted-contact portal availability.',
+  },
+];
