@@ -24,13 +24,13 @@ export const Header: React.FC<HeaderProps> = ({
   showProviderTools = false,
   onLogout,
 }) => {
-  const allNavItems: Array<{ id: ActiveTab; label: string; icon: React.ComponentType<{ className?: string }>; admin?: boolean }> = [
+  const allNavItems: Array<{ id: ActiveTab; label: string; icon: React.ComponentType<{ className?: string }>; admin?: boolean; provider?: boolean }> = [
     { id: 'overview', label: 'Overview', icon: Layers },
     { id: 'fuel', label: 'Fuel & TCO', icon: Fuel },
     { id: 'maintenance', label: 'Maintenance', icon: Wrench },
     { id: 'issues', label: 'Issues', icon: AlertTriangle },
     { id: 'bookings', label: 'Service', icon: CalendarDays },
-    { id: 'workshop', label: 'Workshop', icon: Wrench, provider: true } as any,
+    { id: 'workshop', label: 'Workshop', icon: Wrench, provider: true },
     { id: 'mobility', label: 'Mobility', icon: Navigation },
     { id: 'timeline', label: 'Timeline', icon: Clock },
     { id: 'passport', label: 'Passport', icon: FileCheck },
@@ -39,7 +39,7 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'audit', label: 'Audit', icon: ShieldCheck, admin: true },
     { id: 'traceability', label: 'Traceability', icon: ListTree, admin: true },
   ];
-  const navItems = allNavItems.filter((item: any) =>
+  const navItems = allNavItems.filter((item) =>
     (!item.admin || showAdminTools) && (!item.provider || showProviderTools)
   );
 
