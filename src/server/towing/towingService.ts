@@ -1577,19 +1577,12 @@ export class TowingService {
     }
 
     const now = getCurrentUtcIsoString();
-    let calloutFeeIncurredMinor = 0;
+    // GAR-015/GAR-024 boundary: cancellation may have financial consequences,
+    // but Towing must not invent a fee without an authoritative accepted policy/quote.
+    const calloutFeeIncurredMinor = 0;
     const activeAssignment = towingRepository.getActiveAssignmentForRequest(requestId);
 
     if (activeAssignment) {
-      // If recovery unit was already en-route or on-site, apply callout protection fee
-      if (
-        activeAssignment.status === TowAssignmentStatus.EN_ROUTE_TO_PICKUP ||
-        activeAssignment.status === TowAssignmentStatus.ARRIVED_AT_PICKUP ||
-        activeAssignment.status === TowAssignmentStatus.LOADING
-      ) {
-        calloutFeeIncurredMinor = 200000; // 2,000 KES protection fee in minor units
-      }
-
       // Mark assignment cancelled
       towingRepository.updateAssignment(activeAssignment.id, {
         status: TowAssignmentStatus.CANCELLED,
@@ -1642,7 +1635,7 @@ export class TowingService {
       actor_type: 'USER',
       actor_name: actor?.name || 'User',
       title: 'Tow request cancelled',
-      details: `Reason: ${params.reason}${calloutFeeIncurredMinor > 0 ? ` (Callout fee: ${calloutFeeIncurredMinor / 100} KES)` : ''}`,
+      details: `Reason: ${params.reason}; cancellation fee not assessed by Towing domain`,
       created_at: now,
     });
 
@@ -1659,6 +1652,7 @@ export class TowingService {
           tow_request_id: requestId,
           reason: params.reason,
           callout_fee_incurred_minor: calloutFeeIncurredMinor,
+          fee_status: 'NOT_ASSESSED',
         },
       })
     );
