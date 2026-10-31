@@ -512,25 +512,43 @@ export class TrustedContactService {
   }
 
   revokeContactGrants(contactId: string, reason = 'EMERGENCY_CONTACT_REVOKED'): number {
-    const db = getDatabase();
-    const rows = db.prepare(`
+    const rows = getDatabase().prepare(`
       SELECT id, incident_id FROM trusted_contact_access_grants
       WHERE contact_id = ? AND status = 'ACTIVE'
     `).all(contactId) as Array<{ id: string; incident_id: string }>;
-    const now = getCurrentUtcIsoString();
+    if (rows.length === 0) return 0;
 
-    for (const row of rows) {
-      trustedContactRepository.revokeGrant(row.id, now);
-      trustedContactRepository.recordAccessAudit({
-        id: generateCanonicalId('tca'),
-        grant_id: row.id,
-        incident_id: row.incident_id,
-        contact_id: contactId,
-        action: 'ACCESS_GRANT_REVOKED',
-        metadata: { reason },
-        occurred_at: now,
-      });
-    }
+    const now = getCurrentUtcIsoString();
+    withTransaction(({ db }) => {
+      for (const row of rows) {
+        trustedContactRepository.revokeGrant(row.id, now);
+        trustedContactRepository.recordAccessAudit({
+          id: generateCanonicalId('tca'),
+          grant_id: row.id,
+          incident_id: row.incident_id,
+          contact_id: contactId,
+          action: 'ACCESS_GRANT_REVOKED',
+          metadata: { reason },
+          occurred_at: now,
+        });
+      }
+      enqueueOutboxEvent(
+        createCanonicalEventEnvelope({
+          type: 'safety.trusted_contact.contact_access.revoked',
+          producer: 'garage-os-safety',
+          correlation_id: contactId,
+          subject_ids: { emergency_contact: contactId },
+          actor_type: CanonicalActorType.SYSTEM_WORKER,
+          provenance_class: DataProvenanceClass.DERIVED_DETERMINISTIC,
+          payload: {
+            contact_id: contactId,
+            revoked_grant_count: rows.length,
+            reason,
+          },
+        }),
+        db
+      );
+    });
     return rows.length;
   }
 
