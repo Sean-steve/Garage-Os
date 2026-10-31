@@ -1,5 +1,7 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { AuthenticatedActorContext, PlatformRole } from '../identity/types';
+import { assertAuthorized } from '../identity/policyEngine';
+import { CanonicalPermission } from '../identity/rbac';
 import { CanonicalAppError, ErrorCode } from '../../shared/errors';
 import { CanonicalActorType } from '../../shared/types';
 import { DataProvenanceClass } from '../../shared/provenance';
@@ -305,8 +307,9 @@ export class MarketplacePaymentService{
   sellerSettlement(actor:AuthenticatedActorContext,storeId:string){
     const store=getDatabase().prepare('SELECT organization_id FROM marketplace_stores WHERE id=?').get(storeId) as any;
     if(!store)throw new CanonicalAppError(ErrorCode.NOT_FOUND_OR_NOT_ACCESSIBLE,'Marketplace store not found',404);
-    const membership=actor.memberships.find(m=>m.organization_id===String(store.organization_id)&&m.status==='ACTIVE');
-    if(!membership&&!this.hasFinanceRole(actor))throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED,'Store financial access denied',403);
+    if(!this.hasFinanceRole(actor)){
+      assertAuthorized(actor,CanonicalPermission.MARKETPLACE_ORDERS_READ,{organizationId:String(store.organization_id)});
+    }
     return {summaries:repo.settlementSummary(storeId),entries:repo.listSettlementEntries(storeId),
       truth:{payout_available:false,settlement_ledger_authoritative:true,bank_transfer_executed:false}};
   }
