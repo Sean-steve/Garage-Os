@@ -39,7 +39,7 @@ describe('Car Care Center (GAR-020)',()=>{
 
     vehicleId=vehicleService.createVehicle(owner,{
       make:'Toyota',model:'Harrier',model_year:2018,registration_number:'KDC 919C',
-      initial_odometer_value:86000,initial_odometer_unit:'KM'
+      initial_odometer_value:86000
     }).vehicle.id;
   });
 
