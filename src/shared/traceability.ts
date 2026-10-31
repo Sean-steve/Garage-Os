@@ -876,7 +876,7 @@ export const SPRINT_23_TRACEABILITY_MATRIX: TraceabilityItem[] = [
     source: 'GAR-022',
     title: 'Vehicle Compatibility & Fitment',
     criticality: 'REQUIRED',
-    status: 'IMPLEMENTED',
+    status: 'VERIFIED',
     implementation_refs: [
       'src/server/fitment/fitmentService.ts',
       'src/server/fitment/fitmentRepository.ts',
@@ -907,7 +907,7 @@ export const SPRINT_23_TRACEABILITY_MATRIX: TraceabilityItem[] = [
     source: 'GAR-022 / GAR-000 Data Truth Law',
     title: 'Compatibility evidence hierarchy, uncertainty and conflict handling',
     criticality: 'LAUNCH_CRITICAL',
-    status: 'IMPLEMENTED',
+    status: 'VERIFIED',
     implementation_refs: ['src/server/fitment/fitmentService.ts'],
     schema_refs: ['marketplace_product_fitment_rules', 'marketplace_fitment_decisions'],
     api_event_refs: ['marketplace.fitment.evaluated'],
@@ -921,7 +921,7 @@ export const SPRINT_23_TRACEABILITY_MATRIX: TraceabilityItem[] = [
     source: 'GAR-022',
     title: 'Future external catalog/provider fitment source boundary',
     criticality: 'REQUIRED',
-    status: 'IMPLEMENTED',
+    status: 'VERIFIED',
     implementation_refs: ['src/server/fitment/types.ts', 'src/server/fitment/fitmentService.ts'],
     schema_refs: ['marketplace_fitment_sources'],
     api_event_refs: [
