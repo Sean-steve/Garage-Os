@@ -1,11 +1,16 @@
 import React from 'react';
-import { ShieldCheck, Cpu, Layers, Sliders, ListTree, Activity, Car, Clock, FileCheck, Wrench, AlertTriangle, Fuel } from 'lucide-react';
+import { ShieldCheck, Layers, Sliders, ListTree, Activity, Car, Clock, FileCheck, Wrench, AlertTriangle, Fuel, CalendarDays, Navigation, LogOut } from 'lucide-react';
 import { ActiveTab } from '../types';
 
 interface HeaderProps {
   activeTab: ActiveTab;
   onTabChange: (tab: ActiveTab) => void;
   systemHealth: string;
+  userName?: string;
+  userRole?: string;
+  showAdminTools?: boolean;
+  showProviderTools?: boolean;
+  onLogout?: () => void;
   uptimePercent?: string;
 }
 
@@ -13,19 +18,30 @@ export const Header: React.FC<HeaderProps> = ({
   activeTab,
   onTabChange,
   systemHealth,
+  userName = 'Garage OS User',
+  userRole = 'Authenticated',
+  showAdminTools = false,
+  showProviderTools = false,
+  onLogout,
 }) => {
-  const navItems: Array<{ id: ActiveTab; label: string; icon: React.ComponentType<{ className?: string }> }> = [
-    { id: 'overview', label: 'Bento Grid', icon: Layers },
+  const allNavItems: Array<{ id: ActiveTab; label: string; icon: React.ComponentType<{ className?: string }>; admin?: boolean; provider?: boolean }> = [
+    { id: 'overview', label: 'Overview', icon: Layers },
     { id: 'fuel', label: 'Fuel & TCO', icon: Fuel },
     { id: 'maintenance', label: 'Maintenance', icon: Wrench },
-    { id: 'issues', label: 'Issues & Faults', icon: AlertTriangle },
+    { id: 'issues', label: 'Issues', icon: AlertTriangle },
+    { id: 'bookings', label: 'Service', icon: CalendarDays },
+    { id: 'workshop', label: 'Workshop', icon: Wrench, provider: true },
+    { id: 'mobility', label: 'Mobility', icon: Navigation },
     { id: 'timeline', label: 'Timeline', icon: Clock },
-    { id: 'passport', label: 'Vehicle Passport', icon: FileCheck },
-    { id: 'queues', label: 'Outbox & Jobs', icon: Activity },
-    { id: 'flags', label: 'Feature Flags', icon: Sliders },
-    { id: 'audit', label: 'Audit Log', icon: ShieldCheck },
-    { id: 'traceability', label: 'Traceability', icon: ListTree },
+    { id: 'passport', label: 'Passport', icon: FileCheck },
+    { id: 'queues', label: 'Queues', icon: Activity, admin: true },
+    { id: 'flags', label: 'Flags', icon: Sliders, admin: true },
+    { id: 'audit', label: 'Audit', icon: ShieldCheck, admin: true },
+    { id: 'traceability', label: 'Traceability', icon: ListTree, admin: true },
   ];
+  const navItems = allNavItems.filter((item) =>
+    (!item.admin || showAdminTools) && (!item.provider || showProviderTools)
+  );
 
   return (
     <header className="flex justify-between items-center mb-8 flex-wrap gap-4">
@@ -71,17 +87,26 @@ export const Header: React.FC<HeaderProps> = ({
         {/* User / Session Avatar */}
         <div className="flex items-center gap-3 pl-4 border-l border-slate-800">
           <div className="text-right hidden sm:block">
-            <p className="text-white text-xs font-semibold leading-none">Jane Wambui</p>
+            <p className="text-white text-xs font-semibold leading-none">{userName}</p>
             <p className="text-[9px] text-emerald-400 font-bold uppercase tracking-wider mt-1 flex items-center justify-end gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-              {systemHealth === 'UP' || systemHealth === 'HEALTHY' ? 'Verified Session' : 'Degraded'}
+              {userRole}
             </p>
           </div>
           <div className="w-10 h-10 rounded-full bg-slate-900 border border-slate-700/80 p-1 flex-shrink-0 shadow-inner">
             <div className="w-full h-full bg-gradient-to-tr from-indigo-500 via-indigo-600 to-purple-600 rounded-full flex items-center justify-center text-white text-xs font-bold">
-              JW
+              {userName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'GO'}
             </div>
           </div>
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-900 hover:text-white"
+              title="Sign out"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          )}
         </div>
       </nav>
     </header>

@@ -22,78 +22,74 @@ import {
   MembershipStatus,
   OrganizationStatus,
   OrganizationType,
+  PlatformRole,
 } from '../identity/types';
 import {
   RoadsideIncidentStatus,
   AssignmentStatus,
   ProviderOfferStatus,
 } from '../roadside/types';
+import { canAccessProvider, assertProviderAccess } from '../dispatch/dispatchAuthorization';
+import { vehiclePolicy } from '../vehicle/vehiclePolicy';
+import { CanonicalPermission } from '../identity/rbac';
 
 export const roadsideRouter = Router();
 
 // Middleware: Authenticate actor context
-roadsideRouter.use(authenticate({ optional: true }));
+roadsideRouter.use(authenticate());
 
 function getActor(req: Request): AuthenticatedActorContext & { actor_id: string; roles: string[] } {
-  if (req.actor) {
-    const roles: string[] = [];
-    if (req.actor.active_membership?.role) {
-      roles.push(req.actor.active_membership.role);
-    }
-    if (req.actor.platform_roles) {
-      roles.push(...req.actor.platform_roles);
-    }
-    return {
-      ...req.actor,
-      actor_id: req.actor.user_id || req.actor.id,
-      roles,
-    };
+  if (!req.actor) {
+    throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Authentication required', 401);
   }
 
-  // Fallback dev context
+  const roles: string[] = [];
+  if (req.actor.active_membership?.role) roles.push(req.actor.active_membership.role);
+  if (req.actor.platform_roles) roles.push(...req.actor.platform_roles);
+
   return {
-    id: 'usr_dev_driver_01',
-    user_id: 'usr_dev_driver_01',
-    actor_id: 'usr_dev_driver_01',
-    session_id: 'sess_dev_driver_01',
-    email: 'driver@garage-os.local',
-    account_status: AccountStatus.ACTIVE,
-    platform_roles: [],
-    profile: {
-      user_id: 'usr_dev_driver_01',
-      display_name: 'Dev Stranded Driver',
-      first_name: 'Dev',
-      last_name: 'Driver',
-      preferred_language: 'en',
-      timezone: 'Africa/Nairobi',
-      country: 'KE',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    memberships: [
-      {
-        membership_id: 'mem_dev_driver_01',
-        organization_id: 'org_dev_driver_01',
-        organization_name: 'Driver Fleet',
-        organization_type: OrganizationType.GARAGE,
-        organization_status: OrganizationStatus.ACTIVE,
-        role: MembershipRole.OWNER,
-        status: MembershipStatus.ACTIVE,
-      },
-    ],
-    active_organization_id: 'org_dev_driver_01',
-    active_membership: {
-      membership_id: 'mem_dev_driver_01',
-      organization_id: 'org_dev_driver_01',
-      organization_name: 'Driver Fleet',
-      organization_type: OrganizationType.GARAGE,
-      organization_status: OrganizationStatus.ACTIVE,
-      role: MembershipRole.OWNER,
-      status: MembershipStatus.ACTIVE,
-      permissions: [],
-    },
-    roles: [MembershipRole.OWNER],
+    ...req.actor,
+    actor_id: req.actor.user_id || req.actor.id,
+    roles,
   };
+}
+
+function isPrivilegedRoadsideActor(actor: AuthenticatedActorContext): boolean {
+  return actor.platform_roles.some((role) =>
+    [
+      PlatformRole.PLATFORM_ADMIN,
+      PlatformRole.OPERATIONS,
+      PlatformRole.TRUST_AND_SAFETY,
+      PlatformRole.SUPPORT_AGENT,
+    ].includes(role)
+  );
+}
+
+function assertIncidentOwnerAccess(actor: AuthenticatedActorContext, incidentId: string): void {
+  const incident = roadsideRepository.getIncidentById(incidentId);
+  if (!incident) {
+    throw new CanonicalAppError(ErrorCode.ROADSIDE_INCIDENT_NOT_FOUND, 'Roadside incident not found', 404);
+  }
+  if (incident.reported_by_user_id === actor.id || isPrivilegedRoadsideActor(actor)) return;
+  throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Roadside incident access denied', 403);
+}
+
+function assertIncidentReadAccess(actor: AuthenticatedActorContext, incidentId: string): void {
+  const incident = roadsideRepository.getIncidentById(incidentId);
+  if (!incident) {
+    throw new CanonicalAppError(ErrorCode.ROADSIDE_INCIDENT_NOT_FOUND, 'Roadside incident not found', 404);
+  }
+  if (incident.reported_by_user_id === actor.id || isPrivilegedRoadsideActor(actor)) return;
+
+  if (incident.active_assignment_id) {
+    const assignment = roadsideRepository.getAssignmentById(incident.active_assignment_id);
+    if (assignment && canAccessProvider(actor, assignment.provider_id)) return;
+  }
+
+  const offers = roadsideRepository.getOffersByIncidentId(incidentId);
+  if (offers.some((offer) => canAccessProvider(actor, offer.provider_id))) return;
+
+  throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Roadside incident access denied', 403);
 }
 
 // ===========================================================================
@@ -114,6 +110,8 @@ roadsideRouter.post('/incidents', async (req: Request, res: Response, next: Next
         'Missing required fields: vehicle_id, incident_type, location (latitude, longitude)'
       );
     }
+
+    vehiclePolicy.assertVehicleAccess(actor, vehicle_id, CanonicalPermission.VEHICLE_READ);
 
     const result = await roadsideService.reportIncident(
       {
@@ -138,10 +136,15 @@ roadsideRouter.post('/incidents', async (req: Request, res: Response, next: Next
  */
 roadsideRouter.get('/incidents', (req: Request, res: Response, next: NextFunction) => {
   try {
+    const actor = getActor(req);
     const filters = {
       vehicle_id: req.query.vehicle_id as string | undefined,
-      organization_id: req.query.organization_id as string | undefined,
-      reported_by_user_id: req.query.reported_by_user_id as string | undefined,
+      organization_id: isPrivilegedRoadsideActor(actor)
+        ? (req.query.organization_id as string | undefined)
+        : undefined,
+      reported_by_user_id: isPrivilegedRoadsideActor(actor)
+        ? (req.query.reported_by_user_id as string | undefined)
+        : actor.id,
       status: req.query.status as RoadsideIncidentStatus | undefined,
       limit: req.query.limit ? parseInt(req.query.limit as string, 10) : undefined,
       offset: req.query.offset ? parseInt(req.query.offset as string, 10) : undefined,
@@ -159,6 +162,8 @@ roadsideRouter.get('/incidents', (req: Request, res: Response, next: NextFunctio
  */
 roadsideRouter.get('/incidents/:id', (req: Request, res: Response, next: NextFunction) => {
   try {
+    const actor = getActor(req);
+    assertIncidentReadAccess(actor, req.params.id);
     const aggregate = roadsideService.getIncidentDetails(req.params.id);
     res.json({ success: true, data: aggregate });
   } catch (err) {
@@ -172,6 +177,7 @@ roadsideRouter.get('/incidents/:id', (req: Request, res: Response, next: NextFun
 roadsideRouter.post('/incidents/:id/triage', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertIncidentOwnerAccess(actor, req.params.id);
     const answers = req.body.answers || req.body;
     const result = await roadsideService.conductTriage(req.params.id, answers, actor);
     res.json({ success: true, data: result });
@@ -186,6 +192,7 @@ roadsideRouter.post('/incidents/:id/triage', async (req: Request, res: Response,
 roadsideRouter.post('/incidents/:id/location', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertIncidentOwnerAccess(actor, req.params.id);
     const locationData = req.body;
     const location = await roadsideService.updateLocation(req.params.id, locationData, actor);
     res.json({ success: true, data: location });
@@ -200,6 +207,7 @@ roadsideRouter.post('/incidents/:id/location', async (req: Request, res: Respons
 roadsideRouter.post('/incidents/:id/request-assistance', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertIncidentOwnerAccess(actor, req.params.id);
     const result = await roadsideService.requestAssistance(req.params.id, req.body, actor);
     res.json({ success: true, data: result });
   } catch (err) {
@@ -212,6 +220,8 @@ roadsideRouter.post('/incidents/:id/request-assistance', async (req: Request, re
  */
 roadsideRouter.get('/incidents/:id/offers', (req: Request, res: Response, next: NextFunction) => {
   try {
+    const actor = getActor(req);
+    assertIncidentReadAccess(actor, req.params.id);
     const offers = roadsideRepository.getOffersByIncidentId(req.params.id);
     res.json({ success: true, count: offers.length, data: offers });
   } catch (err) {
@@ -225,6 +235,7 @@ roadsideRouter.get('/incidents/:id/offers', (req: Request, res: Response, next: 
 roadsideRouter.post('/incidents/:id/cancel', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertIncidentOwnerAccess(actor, req.params.id);
     const { reason, notes } = req.body;
     if (!reason) {
       throw new CanonicalAppError(ErrorCode.VALIDATION_ERROR, 'Cancellation reason is required');
@@ -242,6 +253,7 @@ roadsideRouter.post('/incidents/:id/cancel', async (req: Request, res: Response,
 roadsideRouter.post('/incidents/:id/evidence', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertIncidentOwnerAccess(actor, req.params.id);
     const evidence = await roadsideService.addEvidence(req.params.id, req.body, actor);
     res.status(201).json({ success: true, data: evidence });
   } catch (err) {
@@ -254,6 +266,8 @@ roadsideRouter.post('/incidents/:id/evidence', async (req: Request, res: Respons
  */
 roadsideRouter.get('/incidents/:id/activity', (req: Request, res: Response, next: NextFunction) => {
   try {
+    const actor = getActor(req);
+    assertIncidentReadAccess(actor, req.params.id);
     const activity = roadsideRepository.getActivityLog(req.params.id);
     res.json({ success: true, count: activity.length, data: activity });
   } catch (err) {
@@ -271,6 +285,11 @@ roadsideRouter.get('/incidents/:id/activity', (req: Request, res: Response, next
 roadsideRouter.post('/offers/:id/respond', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    const providerOffer = roadsideRepository.getProviderOfferById(req.params.id);
+    if (!providerOffer) {
+      throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, 'Roadside provider offer not found', 404);
+    }
+    assertProviderAccess(actor, providerOffer.provider_id);
     const { accept, decline_reason, eta_minutes, callout_charge_minor, assigned_technician_name, assigned_technician_phone, assigned_vehicle_reg } = req.body;
 
     if (accept === undefined) {
@@ -302,6 +321,8 @@ roadsideRouter.post('/offers/:id/respond', async (req: Request, res: Response, n
  */
 roadsideRouter.get('/providers/:providerId/offers', (req: Request, res: Response, next: NextFunction) => {
   try {
+    const actor = getActor(req);
+    assertProviderAccess(actor, req.params.providerId);
     const status = req.query.status as ProviderOfferStatus | undefined;
     const offers = roadsideService.getProviderOffers(req.params.providerId, status);
     res.json({ success: true, count: offers.length, data: offers });
@@ -315,6 +336,8 @@ roadsideRouter.get('/providers/:providerId/offers', (req: Request, res: Response
  */
 roadsideRouter.get('/providers/:providerId/assignments', (req: Request, res: Response, next: NextFunction) => {
   try {
+    const actor = getActor(req);
+    assertProviderAccess(actor, req.params.providerId);
     const status = req.query.status as AssignmentStatus | undefined;
     const assignments = roadsideService.getProviderAssignments(req.params.providerId, status);
     res.json({ success: true, count: assignments.length, data: assignments });
@@ -329,6 +352,11 @@ roadsideRouter.get('/providers/:providerId/assignments', (req: Request, res: Res
 roadsideRouter.patch('/assignments/:id/status', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    const assignment = roadsideRepository.getAssignmentById(req.params.id);
+    if (!assignment) {
+      throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, 'Roadside assignment not found', 404);
+    }
+    assertProviderAccess(actor, assignment.provider_id);
     const { status, latitude, longitude, eta_minutes, assigned_technician_name, assigned_technician_phone, assigned_vehicle_reg } = req.body;
 
     if (!status) {
@@ -361,6 +389,11 @@ roadsideRouter.patch('/assignments/:id/status', async (req: Request, res: Respon
 roadsideRouter.post('/assignments/:id/interventions', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    const assignment = roadsideRepository.getAssignmentById(req.params.id);
+    if (!assignment) {
+      throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, 'Roadside assignment not found', 404);
+    }
+    assertProviderAccess(actor, assignment.provider_id);
     const {
       result,
       summary_notes,

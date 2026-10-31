@@ -16,6 +16,7 @@ import {
   MembershipStatus,
   OrganizationStatus,
   OrganizationType,
+  PlatformRole,
 } from '../identity/types';
 import {
   TowRequestStatus,
@@ -36,39 +37,68 @@ import {
   TowDeliveryEvidenceType,
   TowFailureType,
 } from '../towing/types';
+import { canAccessProvider, assertProviderAccess } from '../dispatch/dispatchAuthorization';
+import { vehiclePolicy } from '../vehicle/vehiclePolicy';
+import { roadsideRepository } from '../roadside/roadsideRepository';
+import { CanonicalPermission } from '../identity/rbac';
 
 export const towingRouter = Router();
 
 // Middleware: Authenticate actor context (with optional mode for local dev flexibility)
-towingRouter.use(authenticate({ optional: true }));
+towingRouter.use(authenticate());
 
-function getActor(req: Request): TowActorContext & { actor_id: string; roles: string[] } {
-  if (req.actor) {
-    const roles: string[] = [];
-    if (req.actor.active_membership?.role) {
-      roles.push(req.actor.active_membership.role);
-    }
-    if (req.actor.platform_roles) {
-      roles.push(...req.actor.platform_roles);
-    }
-    return {
-      id: req.actor.user_id || req.actor.id,
-      actor_id: req.actor.user_id || req.actor.id,
-      name: req.actor.email?.split('@')[0] || 'Authenticated User',
-      roles,
-      provider_id: req.headers['x-provider-id'] as string | undefined,
-    };
+function getActor(req: Request): TowActorContext & AuthenticatedActorContext & { actor_id: string; roles: string[] } {
+  if (!req.actor) {
+    throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Authentication required', 401);
   }
 
-  // Fallback dev context
-  const providerIdHeader = req.headers['x-provider-id'] as string | undefined;
+  const roles: string[] = [];
+  if (req.actor.active_membership?.role) roles.push(req.actor.active_membership.role);
+  if (req.actor.platform_roles) roles.push(...req.actor.platform_roles);
+
   return {
-    id: providerIdHeader ? `usr_operator_${providerIdHeader}` : 'usr_dev_driver_01',
-    actor_id: providerIdHeader ? `usr_operator_${providerIdHeader}` : 'usr_dev_driver_01',
-    name: providerIdHeader ? 'Tow Operator' : 'Vehicle Owner',
-    roles: providerIdHeader ? ['TOW_OPERATOR', 'PROVIDER_STAFF'] : ['OWNER'],
-    provider_id: providerIdHeader,
+    ...req.actor,
+    id: req.actor.user_id || req.actor.id,
+    actor_id: req.actor.user_id || req.actor.id,
+    name: req.actor.profile.display_name,
+    roles,
+    provider_id: req.headers['x-provider-id'] as string | undefined,
   };
+}
+
+function isPrivilegedTowingActor(actor: AuthenticatedActorContext): boolean {
+  return actor.platform_roles.some((role) =>
+    [
+      PlatformRole.PLATFORM_ADMIN,
+      PlatformRole.OPERATIONS,
+      PlatformRole.TRUST_AND_SAFETY,
+      PlatformRole.SUPPORT_AGENT,
+    ].includes(role)
+  );
+}
+
+function assertTowRequestOwnerAccess(actor: AuthenticatedActorContext, requestId: string): void {
+  const request = towingRepository.getTowRequestById(requestId);
+  if (!request) {
+    throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, 'Tow request not found', 404);
+  }
+  if (request.requesting_user_id === actor.id || isPrivilegedTowingActor(actor)) return;
+  throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Tow request access denied', 403);
+}
+
+function assertTowRequestReadAccess(actor: AuthenticatedActorContext, requestId: string): void {
+  const request = towingRepository.getTowRequestById(requestId);
+  if (!request) {
+    throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, 'Tow request not found', 404);
+  }
+  if (request.requesting_user_id === actor.id || isPrivilegedTowingActor(actor)) return;
+
+  if (request.assigned_provider_id && canAccessProvider(actor, request.assigned_provider_id)) return;
+
+  const offers = towingRepository.listOffersByRequestId(requestId);
+  if (offers.some((offer) => canAccessProvider(actor, offer.provider_id))) return;
+
+  throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Tow request access denied', 403);
 }
 
 // -----------------------------------------------------------------------------
@@ -102,6 +132,8 @@ towingRouter.post('/towing/requests', async (req: Request, res: Response, next: 
       );
     }
 
+    vehiclePolicy.assertVehicleAccess(actor, vehicle_id, CanonicalPermission.VEHICLE_READ);
+
     const aggregate = await towingService.createTowRequest(
       {
         vehicle_id,
@@ -133,6 +165,20 @@ towingRouter.post('/towing/requests', async (req: Request, res: Response, next: 
 towingRouter.post('/towing/requests/from-roadside', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    const sourceIncident = roadsideRepository.getIncidentById(req.body.incident_id);
+    if (!sourceIncident) {
+      throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, 'Roadside incident not found', 404);
+    }
+    if (
+      sourceIncident.reported_by_user_id !== actor.id &&
+      !isPrivilegedTowingActor(actor)
+    ) {
+      throw new CanonicalAppError(
+        ErrorCode.NOT_AUTHORIZED,
+        'Roadside incident is not accessible to this actor',
+        403
+      );
+    }
     const { incident_id, tow_reason, destination } = req.body;
 
     if (!incident_id || !destination) {
@@ -164,14 +210,28 @@ towingRouter.post('/towing/requests/from-roadside', async (req: Request, res: Re
  */
 towingRouter.get('/towing/requests', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const actor = getActor(req);
     const { vehicle_id, requesting_user_id, status, assigned_provider_id, organization_id } = req.query;
+
+    const requestedProviderId = assigned_provider_id as string | undefined;
+    const mayReadRequestedProvider =
+      requestedProviderId ? canAccessProvider(actor, requestedProviderId) : false;
 
     const requests = towingRepository.listTowRequests({
       vehicle_id: vehicle_id as string | undefined,
-      requesting_user_id: requesting_user_id as string | undefined,
-      organization_id: organization_id as string | undefined,
+      requesting_user_id: isPrivilegedTowingActor(actor)
+        ? (requesting_user_id as string | undefined)
+        : mayReadRequestedProvider
+          ? undefined
+          : actor.id,
+      organization_id: isPrivilegedTowingActor(actor)
+        ? (organization_id as string | undefined)
+        : undefined,
       status: status as TowRequestStatus | undefined,
-      assigned_provider_id: assigned_provider_id as string | undefined,
+      assigned_provider_id:
+        isPrivilegedTowingActor(actor) || mayReadRequestedProvider
+          ? requestedProviderId
+          : undefined,
     });
 
     res.json({ success: true, data: requests });
@@ -187,6 +247,7 @@ towingRouter.get('/towing/requests', async (req: Request, res: Response, next: N
 towingRouter.get('/towing/requests/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertTowRequestReadAccess(actor, req.params.id);
     const aggregate = towingService.getTowRequestById(req.params.id, actor);
 
     if (!aggregate) {
@@ -206,6 +267,7 @@ towingRouter.get('/towing/requests/:id', async (req: Request, res: Response, nex
 towingRouter.patch('/towing/requests/:id/destination', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertTowRequestOwnerAccess(actor, req.params.id);
     const {
       destination_type,
       provider_id,
@@ -256,6 +318,7 @@ towingRouter.patch('/towing/requests/:id/destination', async (req: Request, res:
 towingRouter.post('/towing/requests/:id/cancel', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertTowRequestOwnerAccess(actor, req.params.id);
     const { reason, notes } = req.body;
 
     if (!reason) {
@@ -290,12 +353,13 @@ towingRouter.post('/towing/requests/:id/cancel', async (req: Request, res: Respo
 towingRouter.post('/towing/offers/:id/accept', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
-    const { provider_id, operator_staff_id, operator_name, operator_phone } = req.body;
-
-    const resolvedProviderId = provider_id || actor.provider_id;
-    if (!resolvedProviderId) {
-      throw new CanonicalAppError(ErrorCode.VALIDATION_ERROR, 'provider_id is required to accept offer');
+    const providerOffer = towingRepository.getOfferById(req.params.id);
+    if (!providerOffer) {
+      throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, 'Tow provider offer not found', 404);
     }
+    assertProviderAccess(actor, providerOffer.provider_id);
+    const { operator_staff_id, operator_name, operator_phone } = req.body;
+    const resolvedProviderId = providerOffer.provider_id;
 
     const assignment = await towingService.acceptOffer(
       {
@@ -321,12 +385,13 @@ towingRouter.post('/towing/offers/:id/accept', async (req: Request, res: Respons
 towingRouter.post('/towing/offers/:id/decline', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
-    const { provider_id, reason } = req.body;
-
-    const resolvedProviderId = provider_id || actor.provider_id;
-    if (!resolvedProviderId) {
-      throw new CanonicalAppError(ErrorCode.VALIDATION_ERROR, 'provider_id is required to decline offer');
+    const providerOffer = towingRepository.getOfferById(req.params.id);
+    if (!providerOffer) {
+      throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, 'Tow provider offer not found', 404);
     }
+    assertProviderAccess(actor, providerOffer.provider_id);
+    const { reason } = req.body;
+    const resolvedProviderId = providerOffer.provider_id;
 
     await towingService.declineOffer(req.params.id, resolvedProviderId, reason);
     res.json({ success: true, message: 'Offer declined' });
@@ -350,6 +415,7 @@ towingRouter.post('/towing/assignments/:id/en-route', async (req: Request, res: 
     if (!assignment) {
       throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, `Assignment ${req.params.id} not found`);
     }
+    assertProviderAccess(actor, assignment.provider_id);
 
     const updated = await towingService.markEnRoute(req.params.id, assignment.provider_id, actor);
     res.json({ success: true, data: updated });
@@ -369,6 +435,7 @@ towingRouter.post('/towing/assignments/:id/arrived-pickup', async (req: Request,
     if (!assignment) {
       throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, `Assignment ${req.params.id} not found`);
     }
+    assertProviderAccess(actor, assignment.provider_id);
 
     const updated = await towingService.arrivePickup(req.params.id, assignment.provider_id, actor);
     res.json({ success: true, data: updated });
@@ -388,6 +455,7 @@ towingRouter.post('/towing/assignments/:id/inspections', async (req: Request, re
     if (!assignment) {
       throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, `Assignment ${req.params.id} not found`);
     }
+    assertProviderAccess(actor, assignment.provider_id);
 
     const { vehicle_condition_summary, visible_damage, mobility_state_confirmed, odometer_reading_km, notes, evidence } =
       req.body;
@@ -430,6 +498,7 @@ towingRouter.post('/towing/assignments/:id/start-loading', async (req: Request, 
     if (!assignment) {
       throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, `Assignment ${req.params.id} not found`);
     }
+    assertProviderAccess(actor, assignment.provider_id);
 
     const updated = await towingService.startLoading(req.params.id, assignment.provider_id, actor);
     res.json({ success: true, data: updated });
@@ -449,6 +518,7 @@ towingRouter.post('/towing/assignments/:id/confirm-loaded', async (req: Request,
     if (!assignment) {
       throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, `Assignment ${req.params.id} not found`);
     }
+    assertProviderAccess(actor, assignment.provider_id);
 
     const updated = await towingService.confirmVehicleLoaded(req.params.id, assignment.provider_id, actor);
     res.json({ success: true, data: updated });
@@ -468,6 +538,7 @@ towingRouter.post('/towing/assignments/:id/loading-failure', async (req: Request
     if (!assignment) {
       throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, `Assignment ${req.params.id} not found`);
     }
+    assertProviderAccess(actor, assignment.provider_id);
 
     const { failure_type, description, recoverable } = req.body;
     if (!failure_type || !description) {
@@ -502,6 +573,7 @@ towingRouter.post('/towing/assignments/:id/start-transit', async (req: Request, 
     if (!assignment) {
       throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, `Assignment ${req.params.id} not found`);
     }
+    assertProviderAccess(actor, assignment.provider_id);
 
     const updated = await towingService.startTransit(req.params.id, assignment.provider_id, actor);
     res.json({ success: true, data: updated });
@@ -521,6 +593,7 @@ towingRouter.post('/towing/assignments/:id/arrived-destination', async (req: Req
     if (!assignment) {
       throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, `Assignment ${req.params.id} not found`);
     }
+    assertProviderAccess(actor, assignment.provider_id);
 
     const updated = await towingService.arriveDestination(req.params.id, assignment.provider_id, actor);
     res.json({ success: true, data: updated });
@@ -540,6 +613,7 @@ towingRouter.post('/towing/assignments/:id/start-unloading', async (req: Request
     if (!assignment) {
       throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, `Assignment ${req.params.id} not found`);
     }
+    assertProviderAccess(actor, assignment.provider_id);
 
     const updated = await towingService.startUnloading(req.params.id, assignment.provider_id, actor);
     res.json({ success: true, data: updated });
@@ -559,6 +633,7 @@ towingRouter.post('/towing/assignments/:id/confirm-delivery', async (req: Reques
     if (!assignment) {
       throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, `Assignment ${req.params.id} not found`);
     }
+    assertProviderAccess(actor, assignment.provider_id);
 
     const {
       recipient_type,
@@ -628,6 +703,7 @@ towingRouter.post('/towing/recovery-units', async (req: Request, res: Response, 
     } = req.body;
 
     const resolvedProviderId = provider_id || actor.provider_id;
+    if (resolvedProviderId) assertProviderAccess(actor, resolvedProviderId);
     if (!resolvedProviderId || !unit_type || !registration_identifier) {
       throw new CanonicalAppError(
         ErrorCode.VALIDATION_ERROR,
@@ -658,6 +734,8 @@ towingRouter.post('/towing/recovery-units', async (req: Request, res: Response, 
  */
 towingRouter.get('/towing/providers/:providerId/recovery-units', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const actor = getActor(req);
+    assertProviderAccess(actor, req.params.providerId);
     const units = towingService.listProviderRecoveryUnits(req.params.providerId);
     res.json({ success: true, data: units });
   } catch (err) {
@@ -671,6 +749,7 @@ towingRouter.get('/towing/providers/:providerId/recovery-units', async (req: Req
  */
 towingRouter.post('/towing/compatibility-check', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const actor = getActor(req);
     const { vehicle, recovery_unit_id } = req.body;
 
     if (!vehicle || !recovery_unit_id) {
@@ -681,6 +760,7 @@ towingRouter.post('/towing/compatibility-check', async (req: Request, res: Respo
     if (!unit) {
       throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, `Recovery unit ${recovery_unit_id} not found`);
     }
+    assertProviderAccess(actor, unit.provider_id);
 
     const equipment = towingRepository.listUnitEquipment(unit.id);
     const classes = towingRepository.listUnitSupportedClasses(unit.id);

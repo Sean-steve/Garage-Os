@@ -146,9 +146,9 @@ export const BentoBookings: React.FC<BentoBookingsProps> = ({
     setLoading(true);
     try {
       const [bookingsRes, offeringsRes, quotesRes] = await Promise.all([
-        fetch('/api/v1/booking/bookings'),
-        fetch('/api/v1/booking/offerings'),
-        fetch('/api/v1/booking/quotes'),
+        fetch('/api/v1/bookings'),
+        fetch('/api/v1/offerings'),
+        fetch('/api/v1/quotes'),
       ]);
 
       if (bookingsRes.ok) {
@@ -181,10 +181,10 @@ export const BentoBookings: React.FC<BentoBookingsProps> = ({
   // Fetch Slots
   const fetchSlots = useCallback(async () => {
     try {
-      const providerId = 'prov_seed_autocare_01';
+      const providerId = 'srv_seed_garage_01';
       const today = new Date().toISOString().split('T')[0];
       const future = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
-      const res = await fetch(`/api/v1/booking/capacity/slots?provider_id=${providerId}&from_date=${today}&to_date=${future}&duration_minutes=60`);
+      const res = await fetch(`/api/v1/capacity/slots?provider_id=${providerId}&from_date=${today}&to_date=${future}&duration_minutes=60`);
       if (res.ok) {
         const data = await res.json();
         setAvailableSlots(data.data || []);
@@ -221,12 +221,12 @@ export const BentoBookings: React.FC<BentoBookingsProps> = ({
   const handleCreateHold = async (slot: any) => {
     try {
       setActionLoading(true);
-      const res = await fetch('/api/v1/booking/capacity/holds', {
+      const res = await fetch('/api/v1/capacity/holds', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          provider_id: slot.provider_id || 'prov_seed_autocare_01',
-          branch_id: slot.branch_id || 'br_seed_westlands_01',
+          provider_id: slot.provider_id || 'srv_seed_garage_01',
+          branch_id: slot.branch_id || 'prvbr_seed_01',
           slot_start_at: slot.start_at,
           slot_end_at: slot.end_at,
           hold_duration_minutes: 15,
@@ -266,12 +266,12 @@ export const BentoBookings: React.FC<BentoBookingsProps> = ({
 
       const concerns = newBookingForm.concerns ? newBookingForm.concerns.split(',').map((c) => c.trim()) : [];
 
-      const res = await fetch('/api/v1/booking/bookings', {
+      const res = await fetch('/api/v1/bookings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          provider_id: 'prov_seed_autocare_01',
-          branch_id: 'br_seed_westlands_01',
+          provider_id: 'srv_seed_garage_01',
+          branch_id: 'prvbr_seed_01',
           vehicle_id: newBookingForm.vehicle_id,
           delivery_mode: newBookingForm.delivery_mode,
           slot_start_at: startAt,
@@ -303,7 +303,7 @@ export const BentoBookings: React.FC<BentoBookingsProps> = ({
   const handleConfirmBooking = async (bookingId: string) => {
     try {
       setActionLoading(true);
-      const res = await fetch(`/api/v1/booking/bookings/${bookingId}/confirm`, {
+      const res = await fetch(`/api/v1/bookings/${bookingId}/confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -331,7 +331,7 @@ export const BentoBookings: React.FC<BentoBookingsProps> = ({
   const handleCheckInBooking = async (bookingId: string) => {
     try {
       setActionLoading(true);
-      const res = await fetch(`/api/v1/booking/bookings/${bookingId}/check-in`, {
+      const res = await fetch(`/api/v1/bookings/${bookingId}/check-in`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -363,7 +363,7 @@ export const BentoBookings: React.FC<BentoBookingsProps> = ({
     if (!selectedBooking) return;
     try {
       setActionLoading(true);
-      const res = await fetch(`/api/v1/booking/bookings/${selectedBooking.id}/reschedule`, {
+      const res = await fetch(`/api/v1/bookings/${selectedBooking.id}/reschedule`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -391,7 +391,7 @@ export const BentoBookings: React.FC<BentoBookingsProps> = ({
   const handleIssueQuote = async (quoteId: string) => {
     try {
       setActionLoading(true);
-      const res = await fetch(`/api/v1/booking/quotes/${quoteId}/issue`, {
+      const res = await fetch(`/api/v1/quotes/${quoteId}/issue`, {
         method: 'POST',
       });
       const data = await res.json();
@@ -425,7 +425,7 @@ export const BentoBookings: React.FC<BentoBookingsProps> = ({
         return;
       }
 
-      const res = await fetch(`/api/v1/booking/quotes/${quoteId}/accept`, {
+      const res = await fetch(`/api/v1/quotes/${quoteId}/accept`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -456,13 +456,13 @@ export const BentoBookings: React.FC<BentoBookingsProps> = ({
     e.preventDefault();
     try {
       setActionLoading(true);
-      const res = await fetch('/api/v1/booking/quotes', {
+      const res = await fetch('/api/v1/quotes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          provider_id: 'prov_seed_autocare_01',
-          branch_id: 'br_seed_westlands_01',
-          customer_user_id: 'usr_dev_customer_01',
+          provider_id: 'srv_seed_garage_01',
+          branch_id: 'prvbr_seed_01',
+          customer_user_id: 'usr_seed_owner_01',
           vehicle_id: selectedVehicleId,
           booking_id: newQuoteForm.booking_id || undefined,
           title: newQuoteForm.title,

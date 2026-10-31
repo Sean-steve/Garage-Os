@@ -25,6 +25,7 @@ import {
   MembershipStatus,
   OrganizationStatus,
   OrganizationType,
+  PlatformRole,
 } from '../identity/types';
 import {
   CreateServiceCaseDto,
@@ -42,59 +43,91 @@ import {
   PerformRoadTestDto,
   ReleaseVehicleDto,
 } from '../operations/types';
+import { assertProviderAccess } from '../dispatch/dispatchAuthorization';
+import { operationsRepository } from '../operations/operationsRepository';
+import { getDatabase } from '../database/connection';
 
 export const operationsRouter = Router();
 
 // Middleware: Authenticate actor context (populates req.actor)
-operationsRouter.use(authenticate({ optional: true }));
+operationsRouter.use(authenticate());
 
 function getActor(req: Request): AuthenticatedActorContext & { actor_id: string } {
-  if (req.actor) {
-    return {
-      ...req.actor,
-      actor_id: req.actor.user_id || req.actor.id,
-    };
+  if (!req.actor) {
+    throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Authentication required', 401);
   }
   return {
-    id: 'usr_dev_advisor_01',
-    user_id: 'usr_dev_advisor_01',
-    actor_id: 'usr_dev_advisor_01',
-    email: 'advisor@garage-os.local',
-    account_status: AccountStatus.ACTIVE,
-    platform_roles: [],
-    profile: {
-      id: 'prof_dev_advisor_01',
-      user_id: 'usr_dev_advisor_01',
-      given_name: 'Dev',
-      family_name: 'Advisor',
-      phone_number: '+254700000000',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    } as any,
-    memberships: [
-      {
-        membership_id: 'mem_dev_01',
-        organization_id: 'org_dev_provider_01',
-        organization_name: 'Dev Workshop',
-        organization_type: OrganizationType.AUTOMOTIVE_SERVICE_PROVIDER,
-        organization_status: OrganizationStatus.ACTIVE,
-        role: MembershipRole.ADMIN,
-        status: MembershipStatus.ACTIVE,
-      },
-    ],
-    active_organization_id: 'org_dev_provider_01',
-    active_membership: {
-      membership_id: 'mem_dev_01',
-      organization_id: 'org_dev_provider_01',
-      organization_name: 'Dev Workshop',
-      organization_type: OrganizationType.AUTOMOTIVE_SERVICE_PROVIDER,
-      organization_status: OrganizationStatus.ACTIVE,
-      role: MembershipRole.ADMIN,
-      status: MembershipStatus.ACTIVE,
-      permissions: Object.values(CanonicalPermission) as string[],
-    },
-    session_id: 'sess_dev_01',
+    ...req.actor,
+    actor_id: req.actor.user_id || req.actor.id,
   };
+}
+
+function isPrivilegedOperationsActor(actor: AuthenticatedActorContext): boolean {
+  return actor.platform_roles.some((role) =>
+    [PlatformRole.PLATFORM_ADMIN, PlatformRole.OPERATIONS, PlatformRole.SUPPORT_AGENT].includes(role)
+  );
+}
+
+function assertServiceCaseProviderAccess(actor: AuthenticatedActorContext, serviceCaseId: string): void {
+  const serviceCase = operationsRepository.getServiceCaseById(serviceCaseId);
+  if (!serviceCase) {
+    throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, 'Service Case not found', 404);
+  }
+  if (isPrivilegedOperationsActor(actor)) return;
+  assertProviderAccess(actor, serviceCase.provider_id);
+}
+
+function assertWorkOrderProviderAccess(actor: AuthenticatedActorContext, workOrderId: string): void {
+  const workOrder = operationsRepository.getWorkOrderById(workOrderId);
+  if (!workOrder) {
+    throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, 'Work Order not found', 404);
+  }
+  if (isPrivilegedOperationsActor(actor)) return;
+  assertProviderAccess(actor, workOrder.provider_id);
+}
+
+function assertInspectionProviderAccess(actor: AuthenticatedActorContext, inspectionId: string): void {
+  const inspection = operationsRepository.getVehicleInspection(inspectionId);
+  if (!inspection) {
+    throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, 'Inspection not found', 404);
+  }
+  assertServiceCaseProviderAccess(actor, inspection.service_case_id);
+}
+
+function assertWorkOrderItemProviderAccess(actor: AuthenticatedActorContext, itemId: string): void {
+  const item = operationsRepository.getWorkOrderItemById(itemId);
+  if (!item) {
+    throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, 'Work Order Item not found', 404);
+  }
+  assertWorkOrderProviderAccess(actor, item.work_order_id);
+}
+
+function assertWorkSessionProviderAccess(actor: AuthenticatedActorContext, sessionId: string): void {
+  const session = operationsRepository.getTechnicianWorkSession(sessionId);
+  if (!session) {
+    throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, 'Work Session not found', 404);
+  }
+  assertWorkOrderItemProviderAccess(actor, session.work_order_item_id);
+}
+
+function assertPartProviderAccess(actor: AuthenticatedActorContext, partId: string): void {
+  const row = getDatabase()
+    .prepare('SELECT work_order_id FROM work_order_parts WHERE id = ? LIMIT 1')
+    .get(partId) as { work_order_id?: string } | undefined;
+  if (!row?.work_order_id) {
+    throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, 'Work Order Part not found', 404);
+  }
+  assertWorkOrderProviderAccess(actor, row.work_order_id);
+}
+
+function assertHoldProviderAccess(actor: AuthenticatedActorContext, holdId: string): void {
+  const row = getDatabase()
+    .prepare('SELECT work_order_id FROM work_order_holds WHERE id = ? LIMIT 1')
+    .get(holdId) as { work_order_id?: string } | undefined;
+  if (!row?.work_order_id) {
+    throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, 'Work Order Hold not found', 404);
+  }
+  assertWorkOrderProviderAccess(actor, row.work_order_id);
 }
 
 // ---------------- Service Cases ----------------
@@ -105,6 +138,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertProviderAccess(actor, req.body.provider_id);
       assertAuthorized(actor, CanonicalPermission.SERVICE_CASE_CREATE);
       const dto: CreateServiceCaseDto = req.body;
       const result = garageOperationsService.createServiceCase(actor, dto);
@@ -120,9 +154,21 @@ operationsRouter.get(
   '/operations/service-cases',
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const actor = getActor(req);
       const { provider_id, branch_id, vehicle_id, status } = req.query;
+      const providerId = provider_id ? String(provider_id) : undefined;
+      if (!isPrivilegedOperationsActor(actor)) {
+        if (!providerId) {
+          throw new CanonicalAppError(
+            ErrorCode.VALIDATION_ERROR,
+            'provider_id is required for provider-scoped workshop listing',
+            400
+          );
+        }
+        assertProviderAccess(actor, providerId);
+      }
       const list = garageOperationsService.listServiceCases({
-        provider_id: provider_id ? String(provider_id) : undefined,
+        provider_id: providerId,
         branch_id: branch_id ? String(branch_id) : undefined,
         vehicle_id: vehicle_id ? String(vehicle_id) : undefined,
         status: status ? String(status) : undefined,
@@ -139,6 +185,8 @@ operationsRouter.get(
   '/operations/service-cases/:id',
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const actor = getActor(req);
+      assertServiceCaseProviderAccess(actor, req.params.id);
       const aggregate = garageOperationsService.getServiceCaseAggregate(req.params.id);
       if (!aggregate) {
         throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, 'Service Case not found', 404);
@@ -156,6 +204,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertServiceCaseProviderAccess(actor, req.params.id);
       assertAuthorized(actor, CanonicalPermission.SERVICE_CASE_CHECK_IN);
       const dto: PerformCheckInDto = {
         ...req.body,
@@ -175,6 +224,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertServiceCaseProviderAccess(actor, req.params.id);
       const concern = garageOperationsService.addCustomerConcern(actor, req.params.id, req.body);
       res.status(201).json({ success: true, data: concern });
     } catch (err) {
@@ -217,6 +267,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertServiceCaseProviderAccess(actor, req.body.service_case_id);
       assertAuthorized(actor, CanonicalPermission.INSPECTION_PERFORM);
       const dto: CreateInspectionDto = req.body;
       const inspection = garageOperationsService.startInspection(actor, dto);
@@ -233,6 +284,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertInspectionProviderAccess(actor, req.params.id);
       assertAuthorized(actor, CanonicalPermission.INSPECTION_PERFORM);
       const dto: RecordInspectionResultsDto = {
         ...req.body,
@@ -254,6 +306,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertServiceCaseProviderAccess(actor, req.params.id);
       assertAuthorized(actor, CanonicalPermission.RECOMMENDATION_CREATE);
       const dto: RecommendWorkItemDto = {
         ...req.body,
@@ -273,6 +326,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertServiceCaseProviderAccess(actor, req.params.id);
       assertAuthorized(actor, CanonicalPermission.SERVICE_AUTHORIZATION_MANAGE);
       const dto: AuthorizeServiceDto = {
         ...req.body,
@@ -294,6 +348,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertServiceCaseProviderAccess(actor, req.body.service_case_id);
       assertAuthorized(actor, CanonicalPermission.WORK_ORDER_MANAGE);
       const dto: CreateWorkOrderDto = req.body;
       const workOrder = garageOperationsService.createWorkOrder(actor, dto);
@@ -309,9 +364,21 @@ operationsRouter.get(
   '/operations/work-orders',
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const actor = getActor(req);
       const { provider_id, status } = req.query;
+      const providerId = provider_id ? String(provider_id) : undefined;
+      if (!isPrivilegedOperationsActor(actor)) {
+        if (!providerId) {
+          throw new CanonicalAppError(
+            ErrorCode.VALIDATION_ERROR,
+            'provider_id is required for provider-scoped work-order listing',
+            400
+          );
+        }
+        assertProviderAccess(actor, providerId);
+      }
       const list = garageOperationsService.listWorkOrders({
-        provider_id: provider_id ? String(provider_id) : undefined,
+        provider_id: providerId,
         status: status ? String(status) : undefined,
       });
       res.json({ success: true, count: list.length, data: list });
@@ -326,6 +393,8 @@ operationsRouter.get(
   '/operations/work-orders/:id',
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const actor = getActor(req);
+      assertWorkOrderProviderAccess(actor, req.params.id);
       const order = garageOperationsService.getWorkOrderAggregate(req.params.id);
       if (!order) {
         throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, 'Work Order not found', 404);
@@ -343,6 +412,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertWorkOrderProviderAccess(actor, req.params.id);
       assertAuthorized(actor, CanonicalPermission.WORK_ORDER_MANAGE);
       const dto: AssignTechnicianDto = {
         ...req.body,
@@ -362,6 +432,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertWorkOrderItemProviderAccess(actor, req.body.work_order_item_id);
       const dto: StartLaborSessionDto = req.body;
       const session = garageOperationsService.startLaborSession(actor, dto);
       res.status(201).json({ success: true, data: session });
@@ -377,6 +448,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertWorkSessionProviderAccess(actor, req.body.session_id);
       const dto: EndLaborSessionDto = req.body;
       const session = garageOperationsService.endLaborSession(actor, dto);
       res.json({ success: true, data: session });
@@ -392,6 +464,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertWorkOrderProviderAccess(actor, req.params.id);
       const dto: AddWorkOrderPartDto = {
         ...req.body,
         work_order_id: req.params.id,
@@ -410,6 +483,7 @@ operationsRouter.patch(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertPartProviderAccess(actor, req.params.id);
       const { status, replaced_component_id, vehicle_component_id } = req.body;
       garageOperationsService.updateWorkOrderPartStatus(actor, req.params.id, status, {
         replaced_component_id,
@@ -428,6 +502,7 @@ operationsRouter.patch(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertWorkOrderItemProviderAccess(actor, req.params.id);
       const { status, block_reason } = req.body;
       garageOperationsService.updateWorkOrderItemStatus(actor, req.params.id, status, block_reason);
       res.json({ success: true, message: 'Work order item status updated' });
@@ -443,6 +518,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertWorkOrderProviderAccess(actor, req.params.id);
       const { reason, description } = req.body;
       const hold = garageOperationsService.placeWorkOrderHold(actor, req.params.id, reason, description);
       res.status(201).json({ success: true, data: hold });
@@ -458,6 +534,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertHoldProviderAccess(actor, req.params.id);
       garageOperationsService.releaseWorkOrderHold(actor, req.params.id);
       res.json({ success: true, message: 'Work order hold released' });
     } catch (err) {
@@ -474,6 +551,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertWorkOrderProviderAccess(actor, req.params.id);
       assertAuthorized(actor, CanonicalPermission.QUALITY_CONTROL_PERFORM);
       const dto: PerformQcCheckDto = {
         ...req.body,
@@ -493,6 +571,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertWorkOrderProviderAccess(actor, req.params.id);
       const dto: PerformRoadTestDto = {
         ...req.body,
         work_order_id: req.params.id,
@@ -513,6 +592,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertServiceCaseProviderAccess(actor, req.params.id);
       assertAuthorized(actor, CanonicalPermission.VEHICLE_RELEASE_PERFORM);
       const dto: ReleaseVehicleDto = {
         ...req.body,
@@ -532,6 +612,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertServiceCaseProviderAccess(actor, req.params.id);
       const { content, visibility } = req.body;
       const note = garageOperationsService.addNote(actor, req.params.id, content, visibility);
       res.status(201).json({ success: true, data: note });
@@ -547,6 +628,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertServiceCaseProviderAccess(actor, req.params.id);
       const { reason } = req.body;
       garageOperationsService.cancelServiceCase(actor, req.params.id, reason || 'Cancelled by user');
       res.json({ success: true, message: 'Service case cancelled' });

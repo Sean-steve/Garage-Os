@@ -6,11 +6,34 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { authService } from '../identity/authService';
 import { organizationService } from '../identity/organizationService';
 import { adminService } from '../identity/adminService';
-import { authenticate, requirePermission } from './authMiddleware';
+import { authenticate, requirePermission, GARAGE_OS_SESSION_COOKIE } from './authMiddleware';
 import { CanonicalPermission, getCanonicalPermissionMatrix } from '../identity/rbac';
 import { AccountStatus, MembershipRole, OrganizationType } from '../identity/types';
+import { config } from '../config/env';
 
 export const authRouter = Router();
+
+function readSessionCookie(req: Request): string | undefined {
+  const raw = req.headers.cookie;
+  if (!raw) return undefined;
+  for (const part of raw.split(';')) {
+    const [name, ...valueParts] = part.trim().split('=');
+    if (name === GARAGE_OS_SESSION_COOKIE) {
+      return decodeURIComponent(valueParts.join('='));
+    }
+  }
+  return undefined;
+}
+
+function sessionCookie(value: string, maxAgeSeconds: number): string {
+  const secure = config.APP_ENV === 'production' ? '; Secure' : '';
+  return `${GARAGE_OS_SESSION_COOKIE}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAgeSeconds}${secure}`;
+}
+
+function clearSessionCookie(): string {
+  const secure = config.APP_ENV === 'production' ? '; Secure' : '';
+  return `${GARAGE_OS_SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${secure}`;
+}
 
 // ==========================================
 // 1. Authentication & Registration Endpoints
@@ -42,6 +65,7 @@ authRouter.post('/auth/login', (req: Request, res: Response, next: NextFunction)
       ipAddress: req.ip,
       correlationId: (req as any).correlationId,
     });
+    res.setHeader('Set-Cookie', sessionCookie(result.session_token, config.SESSION_TTL_SECONDS));
     res.json(result);
   } catch (err) {
     next(err);
@@ -51,8 +75,11 @@ authRouter.post('/auth/login', (req: Request, res: Response, next: NextFunction)
 authRouter.post('/auth/logout', authenticate(), (req: Request, res: Response, next: NextFunction) => {
   try {
     const authHeader = req.headers.authorization;
-    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.headers['x-session-token'] as string);
-    authService.logout(token, (req as any).correlationId);
+    const token = authHeader?.startsWith('Bearer ')
+      ? authHeader.substring(7)
+      : (req.headers['x-session-token'] as string) || readSessionCookie(req);
+    authService.logout(token || '', (req as any).correlationId);
+    res.setHeader('Set-Cookie', clearSessionCookie());
     res.json({ message: 'Successfully logged out' });
   } catch (err) {
     next(err);

@@ -16,8 +16,21 @@ import {
   ResponderAvailabilityStatus,
   LocationSourceType,
 } from './types';
+import { authenticate } from '../api/authMiddleware';
+import { CanonicalAppError, ErrorCode } from '../../shared/errors';
+import {
+  assertDispatchRequestAccess,
+  assertDispatchSourceAccess,
+  assertOperationsAccess,
+  assertProviderAccess,
+  assertResponderAccess,
+  assertTrackingAccess,
+} from './dispatchAuthorization';
 
 export const dispatchRouter = Router();
+
+// Dispatch APIs are protected by canonical session authentication.
+dispatchRouter.use(authenticate());
 
 /**
  * 1. Update responder presence and heartbeat
@@ -26,9 +39,20 @@ dispatchRouter.post('/responders/:responderId/presence', async (req: Request, re
   try {
     const { responderId } = req.params;
     const { provider_id, responder_type, status, current_job_reference } = req.body;
+    const existingPresence = locationService.getPresence(responderId);
+    const effectiveProviderId = provider_id || existingPresence?.provider_id;
+
+    if (!effectiveProviderId) {
+      throw new CanonicalAppError(
+        ErrorCode.VALIDATION_ERROR,
+        'provider_id is required when registering responder presence',
+        400
+      );
+    }
+    assertProviderAccess(req.actor!, effectiveProviderId);
 
     const presence = locationService.updatePresence({
-      provider_id: provider_id || 'unknown_provider',
+      provider_id: effectiveProviderId,
       responder_type: responder_type || ResponderType.PROVIDER,
       responder_reference_id: responderId,
       status: status || ResponderAvailabilityStatus.AVAILABLE,
@@ -60,6 +84,8 @@ dispatchRouter.post('/responders/:responderId/location', async (req: Request, re
       captured_at,
       source_type,
     } = req.body;
+
+    assertResponderAccess(req.actor!, responderId);
 
     const result = locationService.ingestObservation({
       responder_type: responder_type || ResponderType.PROVIDER,
@@ -98,6 +124,7 @@ dispatchRouter.post('/responders/:responderId/location', async (req: Request, re
 dispatchRouter.get('/responders/:responderId/location', async (req: Request, res: Response) => {
   try {
     const { responderId } = req.params;
+    assertResponderAccess(req.actor!, responderId);
     const location = locationService.getCurrentLocation(responderId);
     if (!location) {
       return res.status(404).json({ error: 'Location not found for responder' });
@@ -127,6 +154,8 @@ dispatchRouter.post('/requests', async (req: Request, res: Response) => {
       strategy,
     } = req.body;
 
+    assertDispatchSourceAccess(req.actor!, dispatch_domain as DispatchDomain, source_reference_id);
+
     const result = await dispatchService.createRequest({
       dispatch_domain: dispatch_domain as DispatchDomain,
       source_reference_type,
@@ -152,6 +181,7 @@ dispatchRouter.post('/requests', async (req: Request, res: Response) => {
  */
 dispatchRouter.get('/requests/:id', async (req: Request, res: Response) => {
   try {
+    assertDispatchRequestAccess(req.actor!, req.params.id);
     const request = dispatchRepository.getRequestById(req.params.id);
     if (!request) {
       return res.status(404).json({ error: 'Dispatch request not found' });
@@ -180,13 +210,25 @@ dispatchRouter.get('/requests/:id', async (req: Request, res: Response) => {
  */
 dispatchRouter.post('/requests/:id/offers/:offerId/accept', async (req: Request, res: Response) => {
   try {
-    const { responder_reference_id, actor } = req.body;
+    const { responder_reference_id } = req.body;
+    if (!responder_reference_id) {
+      throw new CanonicalAppError(
+        ErrorCode.VALIDATION_ERROR,
+        'responder_reference_id is required',
+        400
+      );
+    }
+    assertResponderAccess(req.actor!, responder_reference_id);
 
     const result = await dispatchService.acceptOffer({
       dispatchRequestId: req.params.id,
       offerId: req.params.offerId,
       responderReferenceId: responder_reference_id,
-      actor: actor || { id: 'api_actor', role: 'PROVIDER' },
+      actor: {
+        id: req.actor!.id,
+        role: req.actor!.roles?.[0] || req.actor!.active_membership?.role || 'PROVIDER',
+        name: req.actor!.profile.display_name,
+      },
     });
 
     res.json({ success: true, data: result });
@@ -200,13 +242,18 @@ dispatchRouter.post('/requests/:id/offers/:offerId/accept', async (req: Request,
  */
 dispatchRouter.post('/requests/:id/manual-assign', async (req: Request, res: Response) => {
   try {
-    const { candidate_id, override_reason, actor } = req.body;
+    assertOperationsAccess(req.actor!);
+    const { candidate_id, override_reason } = req.body;
 
     const result = await dispatchService.manualAssign({
       dispatchRequestId: req.params.id,
       candidateId: candidate_id,
       overrideReason: override_reason,
-      actor: actor || { id: 'dispatcher', role: 'OPERATIONS_AGENT', name: 'Dispatcher Agent' },
+      actor: {
+        id: req.actor!.id,
+        role: req.actor!.platform_roles[0] || 'OPERATIONS',
+        name: req.actor!.profile.display_name,
+      },
     });
 
     res.json({ success: true, data: result });
@@ -220,12 +267,17 @@ dispatchRouter.post('/requests/:id/manual-assign', async (req: Request, res: Res
  */
 dispatchRouter.post('/requests/:id/reassign', async (req: Request, res: Response) => {
   try {
-    const { reason, actor } = req.body;
+    assertOperationsAccess(req.actor!);
+    const { reason } = req.body;
 
     const result = await dispatchService.reassign({
       dispatchRequestId: req.params.id,
       reason: reason || 'Responder delayed / uncommunicative',
-      actor: actor || { id: 'dispatcher', role: 'OPERATIONS_AGENT', name: 'Dispatcher Agent' },
+      actor: {
+        id: req.actor!.id,
+        role: req.actor!.platform_roles[0] || 'OPERATIONS',
+        name: req.actor!.profile.display_name,
+      },
     });
 
     res.json({ success: true, data: result });
@@ -239,13 +291,12 @@ dispatchRouter.post('/requests/:id/reassign', async (req: Request, res: Response
  */
 dispatchRouter.get('/tracking/:assignmentId', async (req: Request, res: Response) => {
   try {
-    const requesterUserId = (req.query.userId as string) || 'customer_demo';
-    const requesterRole = (req.query.role as string) || 'CUSTOMER';
+    assertTrackingAccess(req.actor!, req.params.assignmentId);
 
     const trackingView = dispatchService.getTrackingView({
       assignmentId: req.params.assignmentId,
-      requesterUserId,
-      requesterRole,
+      requesterUserId: req.actor!.id,
+      requesterRole: req.actor!.platform_roles[0] || req.actor!.roles?.[0] || 'CUSTOMER',
     });
 
     res.json({ success: true, data: trackingView });
@@ -259,6 +310,7 @@ dispatchRouter.get('/tracking/:assignmentId', async (req: Request, res: Response
  */
 dispatchRouter.get('/operations/overview', async (req: Request, res: Response) => {
   try {
+    assertOperationsAccess(req.actor!);
     const overview = dispatchRepository.getOperationsOverview();
     res.json({ success: true, data: overview });
   } catch (err: any) {
@@ -276,11 +328,15 @@ dispatchRouter.get('/events', (req: Request, res: Response) => {
   res.flushHeaders?.();
 
   const clientId = `sse_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-  const topicsParam = (req.query.topics as string) || '*';
-  const topics = topicsParam.split(',').map((t) => t.trim());
+  const topicsParam = (req.query.topics as string) || '';
+  const topics = topicsParam
+    .split(',')
+    .map((t) => t.trim())
+    .filter(Boolean);
 
-  realtimeBus.registerSseClient(clientId, res, topics, {
-    userId: req.query.userId as string,
-    role: req.query.role as string,
-  });
+  if (topics.length === 0) {
+    return res.status(400).json({ error: 'At least one authorized topic is required' });
+  }
+
+  realtimeBus.registerSseClient(clientId, res, topics, req.actor!);
 });

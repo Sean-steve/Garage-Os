@@ -22,74 +22,76 @@ import {
   MembershipStatus,
   OrganizationStatus,
   OrganizationType,
+  PlatformRole,
 } from '../identity/types';
 import { BookingStatus, QuoteStatus } from '../booking/types';
+import { canAccessProvider, assertProviderAccess } from '../dispatch/dispatchAuthorization';
+import { vehiclePolicy } from '../vehicle/vehiclePolicy';
+import { CanonicalPermission } from '../identity/rbac';
 
 export const bookingRouter = Router();
 
 // Middleware: Authenticate actor context (populates req.actor)
-bookingRouter.use(authenticate({ optional: true }));
+bookingRouter.use(authenticate());
 
 function getActor(req: Request): AuthenticatedActorContext & { actor_id: string; roles: string[] } {
-  if (req.actor) {
-    const roles: string[] = [];
-    if (req.actor.active_membership?.role) {
-      roles.push(req.actor.active_membership.role);
-    }
-    if (req.actor.platform_roles) {
-      roles.push(...req.actor.platform_roles);
-    }
-    return {
-      ...req.actor,
-      actor_id: req.actor.user_id || req.actor.id,
-      roles,
-    };
+  if (!req.actor) {
+    throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Authentication required', 401);
   }
 
-  // Fallback dev context (Customer / Member default)
+  const roles: string[] = [];
+  if (req.actor.active_membership?.role) roles.push(req.actor.active_membership.role);
+  if (req.actor.platform_roles) roles.push(...req.actor.platform_roles);
+
   return {
-    id: 'usr_dev_customer_01',
-    user_id: 'usr_dev_customer_01',
-    actor_id: 'usr_dev_customer_01',
-    session_id: 'sess_dev_cust_01',
-    email: 'customer@garage-os.local',
-    account_status: AccountStatus.ACTIVE,
-    platform_roles: [],
-    profile: {
-      user_id: 'usr_dev_customer_01',
-      display_name: 'Dev Customer',
-      first_name: 'Dev',
-      last_name: 'Customer',
-      preferred_language: 'en',
-      timezone: 'Africa/Nairobi',
-      country: 'KE',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    memberships: [
-      {
-        membership_id: 'mem_dev_cust_01',
-        organization_id: 'org_dev_cust_01',
-        organization_name: 'Customer Org',
-        organization_type: OrganizationType.GARAGE,
-        organization_status: OrganizationStatus.ACTIVE,
-        role: MembershipRole.OWNER,
-        status: MembershipStatus.ACTIVE,
-      },
-    ],
-    active_organization_id: 'org_dev_cust_01',
-    active_membership: {
-      membership_id: 'mem_dev_cust_01',
-      organization_id: 'org_dev_cust_01',
-      organization_name: 'Customer Org',
-      organization_type: OrganizationType.GARAGE,
-      organization_status: OrganizationStatus.ACTIVE,
-      role: MembershipRole.OWNER,
-      status: MembershipStatus.ACTIVE,
-      permissions: [],
-    },
-    roles: [MembershipRole.OWNER],
+    ...req.actor,
+    actor_id: req.actor.user_id || req.actor.id,
+    roles,
   };
+}
+
+function isPrivilegedBookingActor(actor: AuthenticatedActorContext): boolean {
+  return actor.platform_roles.some((role) =>
+    [PlatformRole.PLATFORM_ADMIN, PlatformRole.OPERATIONS, PlatformRole.SUPPORT_AGENT].includes(role)
+  );
+}
+
+function assertBookingReadAccess(actor: AuthenticatedActorContext, bookingId: string): void {
+  const booking = bookingService.getBooking(bookingId);
+  if (booking.customer_user_id === actor.id || isPrivilegedBookingActor(actor)) return;
+  if (canAccessProvider(actor, booking.provider_id)) return;
+  throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Booking access denied', 403);
+}
+
+function assertBookingCustomerAccess(actor: AuthenticatedActorContext, bookingId: string): void {
+  const booking = bookingService.getBooking(bookingId);
+  if (booking.customer_user_id === actor.id || isPrivilegedBookingActor(actor)) return;
+  throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Booking customer action denied', 403);
+}
+
+function assertBookingProviderAccess(actor: AuthenticatedActorContext, bookingId: string): void {
+  const booking = bookingService.getBooking(bookingId);
+  if (isPrivilegedBookingActor(actor) || canAccessProvider(actor, booking.provider_id)) return;
+  throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Booking provider action denied', 403);
+}
+
+function assertQuoteReadAccess(actor: AuthenticatedActorContext, quoteId: string): void {
+  const quote = bookingService.getQuote(quoteId);
+  if (quote.customer_user_id === actor.id || isPrivilegedBookingActor(actor)) return;
+  if (canAccessProvider(actor, quote.provider_id)) return;
+  throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Quote access denied', 403);
+}
+
+function assertQuoteCustomerAccess(actor: AuthenticatedActorContext, quoteId: string): void {
+  const quote = bookingService.getQuote(quoteId);
+  if (quote.customer_user_id === actor.id || isPrivilegedBookingActor(actor)) return;
+  throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Quote customer action denied', 403);
+}
+
+function assertQuoteProviderAccess(actor: AuthenticatedActorContext, quoteId: string): void {
+  const quote = bookingService.getQuote(quoteId);
+  if (isPrivilegedBookingActor(actor) || canAccessProvider(actor, quote.provider_id)) return;
+  throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Quote provider action denied', 403);
 }
 
 // ===========================================================================
@@ -123,6 +125,7 @@ bookingRouter.get('/offerings/:id', (req: Request, res: Response, next: NextFunc
 bookingRouter.post('/offerings', (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertProviderAccess(actor, req.body.provider_id);
     const offering = bookingService.createOffering(
       { actor_id: actor.actor_id, roles: actor.roles, name: `${actor.profile?.display_name || 'Provider'}` },
       req.body
@@ -183,9 +186,11 @@ bookingRouter.post('/capacity/holds', (req: Request, res: Response, next: NextFu
 bookingRouter.post('/bookings', (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    vehiclePolicy.assertVehicleAccess(actor, req.body.vehicle_id, CanonicalPermission.VEHICLE_READ);
+    const bookingInput = { ...req.body, customer_user_id: actor.id };
     const booking = bookingService.createBooking(
       { actor_id: actor.actor_id, roles: actor.roles, name: `${actor.profile?.display_name || 'Customer'}` },
-      req.body
+      bookingInput
     );
     res.status(201).json({ success: true, data: booking });
   } catch (err) {
@@ -195,10 +200,19 @@ bookingRouter.post('/bookings', (req: Request, res: Response, next: NextFunction
 
 bookingRouter.get('/bookings', (req: Request, res: Response, next: NextFunction) => {
   try {
+    const actor = getActor(req);
+    const requestedProviderId = req.query.provider_id as string | undefined;
+    const providerScoped = requestedProviderId ? canAccessProvider(actor, requestedProviderId) : false;
     const filters = {
-      customer_user_id: req.query.customer_user_id as string | undefined,
-      provider_id: req.query.provider_id as string | undefined,
-      branch_id: req.query.branch_id as string | undefined,
+      customer_user_id: isPrivilegedBookingActor(actor) || providerScoped
+        ? (req.query.customer_user_id as string | undefined)
+        : actor.id,
+      provider_id: isPrivilegedBookingActor(actor) || providerScoped
+        ? requestedProviderId
+        : undefined,
+      branch_id: isPrivilegedBookingActor(actor) || providerScoped
+        ? (req.query.branch_id as string | undefined)
+        : undefined,
       vehicle_id: req.query.vehicle_id as string | undefined,
       status: req.query.status as BookingStatus | undefined,
     };
@@ -211,6 +225,8 @@ bookingRouter.get('/bookings', (req: Request, res: Response, next: NextFunction)
 
 bookingRouter.get('/bookings/:id', (req: Request, res: Response, next: NextFunction) => {
   try {
+    const actor = getActor(req);
+    assertBookingReadAccess(actor, req.params.id);
     const booking = bookingService.getBooking(req.params.id);
     res.json({ success: true, data: booking });
   } catch (err) {
@@ -221,6 +237,7 @@ bookingRouter.get('/bookings/:id', (req: Request, res: Response, next: NextFunct
 bookingRouter.post('/bookings/:id/confirm', (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertBookingProviderAccess(actor, req.params.id);
     const booking = bookingService.confirmBooking(
       { actor_id: actor.actor_id, roles: actor.roles, name: `${actor.profile?.display_name || 'Advisor'}` },
       req.params.id,
@@ -235,6 +252,7 @@ bookingRouter.post('/bookings/:id/confirm', (req: Request, res: Response, next: 
 bookingRouter.post('/bookings/:id/reschedule', (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertBookingReadAccess(actor, req.params.id);
     const revision = bookingService.proposeReschedule(
       { actor_id: actor.actor_id, roles: actor.roles, name: `${actor.profile?.display_name || 'User'}` },
       req.params.id,
@@ -249,6 +267,7 @@ bookingRouter.post('/bookings/:id/reschedule', (req: Request, res: Response, nex
 bookingRouter.post('/bookings/:id/reschedule/accept', (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertBookingReadAccess(actor, req.params.id);
     const { revision_id } = req.body;
     if (!revision_id) {
       throw new CanonicalAppError(ErrorCode.VALIDATION_ERROR, 'revision_id is required', 400);
@@ -267,6 +286,7 @@ bookingRouter.post('/bookings/:id/reschedule/accept', (req: Request, res: Respon
 bookingRouter.post('/bookings/:id/cancel', (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertBookingReadAccess(actor, req.params.id);
     const booking = bookingService.cancelBooking(
       { actor_id: actor.actor_id, roles: actor.roles, name: `${actor.profile?.display_name || 'User'}` },
       req.params.id,
@@ -281,6 +301,7 @@ bookingRouter.post('/bookings/:id/cancel', (req: Request, res: Response, next: N
 bookingRouter.post('/bookings/:id/check-in', (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertBookingProviderAccess(actor, req.params.id);
     const result = bookingService.checkInBooking(
       { actor_id: actor.actor_id, roles: actor.roles, name: `${actor.profile?.display_name || 'Service Advisor'}` },
       req.params.id,
@@ -295,6 +316,7 @@ bookingRouter.post('/bookings/:id/check-in', (req: Request, res: Response, next:
 bookingRouter.post('/bookings/:id/complete', (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertBookingProviderAccess(actor, req.params.id);
     const booking = bookingService.completeBooking(
       { actor_id: actor.actor_id, roles: actor.roles, name: `${actor.profile?.display_name || 'Advisor'}` },
       req.params.id
@@ -312,6 +334,7 @@ bookingRouter.post('/bookings/:id/complete', (req: Request, res: Response, next:
 bookingRouter.post('/estimates', (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertProviderAccess(actor, req.body.provider_id);
     const estimate = bookingService.createEstimate(
       { actor_id: actor.actor_id, roles: actor.roles, name: `${actor.profile?.display_name || 'Advisor'}` },
       req.body
@@ -329,6 +352,7 @@ bookingRouter.post('/estimates', (req: Request, res: Response, next: NextFunctio
 bookingRouter.post('/quotes', (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertProviderAccess(actor, req.body.provider_id);
     const quote = bookingService.createQuote(
       { actor_id: actor.actor_id, roles: actor.roles, name: `${actor.profile?.display_name || 'Advisor'}` },
       req.body
@@ -341,11 +365,20 @@ bookingRouter.post('/quotes', (req: Request, res: Response, next: NextFunction) 
 
 bookingRouter.get('/quotes', (req: Request, res: Response, next: NextFunction) => {
   try {
+    const actor = getActor(req);
+    const requestedProviderId = req.query.provider_id as string | undefined;
+    const providerScoped = requestedProviderId ? canAccessProvider(actor, requestedProviderId) : false;
     const filters = {
       booking_id: req.query.booking_id as string | undefined,
-      service_case_id: req.query.service_case_id as string | undefined,
-      provider_id: req.query.provider_id as string | undefined,
-      customer_user_id: req.query.customer_user_id as string | undefined,
+      service_case_id: isPrivilegedBookingActor(actor) || providerScoped
+        ? (req.query.service_case_id as string | undefined)
+        : undefined,
+      provider_id: isPrivilegedBookingActor(actor) || providerScoped
+        ? requestedProviderId
+        : undefined,
+      customer_user_id: isPrivilegedBookingActor(actor) || providerScoped
+        ? (req.query.customer_user_id as string | undefined)
+        : actor.id,
       status: req.query.status as QuoteStatus | undefined,
     };
     const quotes = bookingService.listQuotes(filters);
@@ -357,6 +390,8 @@ bookingRouter.get('/quotes', (req: Request, res: Response, next: NextFunction) =
 
 bookingRouter.get('/quotes/:id', (req: Request, res: Response, next: NextFunction) => {
   try {
+    const actor = getActor(req);
+    assertQuoteReadAccess(actor, req.params.id);
     const quote = bookingService.getQuote(req.params.id);
     res.json({ success: true, data: quote });
   } catch (err) {
@@ -367,6 +402,7 @@ bookingRouter.get('/quotes/:id', (req: Request, res: Response, next: NextFunctio
 bookingRouter.post('/quotes/:id/issue', (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertQuoteProviderAccess(actor, req.params.id);
     const quote = bookingService.issueQuote(
       { actor_id: actor.actor_id, roles: actor.roles, name: `${actor.profile?.display_name || 'Advisor'}` },
       req.params.id
@@ -380,6 +416,7 @@ bookingRouter.post('/quotes/:id/issue', (req: Request, res: Response, next: Next
 bookingRouter.post('/quotes/:id/view', (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertQuoteCustomerAccess(actor, req.params.id);
     const quote = bookingService.viewQuote(
       { actor_id: actor.actor_id, roles: actor.roles, name: `${actor.profile?.display_name || 'Customer'}` },
       req.params.id
@@ -393,6 +430,7 @@ bookingRouter.post('/quotes/:id/view', (req: Request, res: Response, next: NextF
 bookingRouter.post('/quotes/:id/accept', (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertQuoteCustomerAccess(actor, req.params.id);
     const result = bookingService.acceptQuote(
       { actor_id: actor.actor_id, roles: actor.roles, name: `${actor.profile?.display_name || 'Customer'}` },
       req.params.id,
@@ -407,6 +445,7 @@ bookingRouter.post('/quotes/:id/accept', (req: Request, res: Response, next: Nex
 bookingRouter.post('/quotes/:id/reject', (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertQuoteCustomerAccess(actor, req.params.id);
     const quote = bookingService.rejectQuote(
       { actor_id: actor.actor_id, roles: actor.roles, name: `${actor.profile?.display_name || 'Customer'}` },
       req.params.id,
@@ -421,6 +460,7 @@ bookingRouter.post('/quotes/:id/reject', (req: Request, res: Response, next: Nex
 bookingRouter.post('/quotes/:id/revise', (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertQuoteProviderAccess(actor, req.params.id);
     const revision = bookingService.reviseQuote(
       { actor_id: actor.actor_id, roles: actor.roles, name: `${actor.profile?.display_name || 'Advisor'}` },
       req.params.id,

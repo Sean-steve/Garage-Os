@@ -6,7 +6,7 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { getSanitizedConfig } from '../config/env';
+import { getSanitizedConfig, config } from '../config/env';
 import { getDatabase, checkDatabaseHealth } from '../database/connection';
 import { withTransaction } from '../database/transaction';
 import { outboxWorker, enqueueOutboxEvent } from '../events/outbox';
@@ -18,7 +18,7 @@ import { storageEngine } from '../storage/storageEngine';
 import { listAuditEvents, recordAuditEvent } from '../security/audit';
 import { featureFlagManager } from '../featureFlags/flags';
 import { metrics } from '../observability/metrics';
-import { SPRINT_1_TRACEABILITY_MATRIX } from '../../shared/traceability';
+import { SPRINT_1_14_TRACEABILITY_MATRIX } from '../../shared/traceability';
 import { PlatformLifecycleState, CanonicalActorType } from '../../shared/types';
 import { CanonicalAppError, ErrorCode } from '../../shared/errors';
 import { DataProvenanceClass } from '../../shared/provenance';
@@ -35,8 +35,17 @@ import { bookingRouter } from './bookingRouter';
 import { roadsideRouter } from './roadsideRouter';
 import { towingRouter } from './towingRouter';
 import { dispatchRouter } from '../dispatch/dispatchRouter';
+import { authenticate, requirePermission } from './authMiddleware';
+import { CanonicalPermission } from '../identity/rbac';
 
 export const apiV1Router = Router();
+
+function requireNonProduction(req: Request, _res: Response, next: (err?: unknown) => void): void {
+  if (config.APP_ENV === 'production') {
+    return next(new CanonicalAppError(ErrorCode.NOT_FOUND_OR_NOT_ACCESSIBLE, 'Resource not found', 404));
+  }
+  next();
+}
 
 // Mount Sprint 2 Identity, Auth & Organization Router
 apiV1Router.use(authRouter);
@@ -88,12 +97,12 @@ apiV1Router.get('/platform/capabilities', (req: Request, res: Response) => {
 
   const capabilities = {
     platform_name: 'Garage OS',
-    version: '8.0.0-sprint8',
-    environment: process.env.NODE_ENV || 'development',
+    version: '14.1.0-r1',
+    environment: config.APP_ENV,
     lifecycle_state: PlatformLifecycleState.ACTIVE,
     architecture_baseline: 'GAR-000-to-GAR-051',
-    active_sprint: 'Sprint 8: Tyres, Parts, Components & Vehicle Configuration Architecture (GAR-010)',
-    next_sprint: 'Sprint 9: Garage & Automotive Service Provider Domain Architecture (GAR-011)',
+    active_sprint: 'Phase R1: Sprint 1–14 Repository Reconciliation & Certification',
+    next_sprint: 'Sprint 15: Emergency Circle & Human Safety Foundation (GAR-017)',
     constitutional_laws_enforced: 12,
     config: getSanitizedConfig(),
     domains: [
@@ -105,9 +114,13 @@ apiV1Router.get('/platform/capabilities', (req: Request, res: Response) => {
       { id: 'GAR-008', title: 'Vehicle Issues & Recurrence', status: 'ACTIVE_IMPLEMENTED', owner: 'Diagnostics Domain' },
       { id: 'GAR-009', title: 'Fuel, Expenses & TCO', status: 'ACTIVE_IMPLEMENTED', owner: 'Cost Domain' },
       { id: 'GAR-010', title: 'Tyres & Vehicle Components', status: 'ACTIVE_IMPLEMENTED', owner: 'Components Domain' },
-      { id: 'GAR-011', title: 'Garage & Provider Network', status: 'FOUNDATION_READY', owner: 'Provider Domain' },
-      { id: 'GAR-014', title: 'Roadside Assistance', status: 'FOUNDATION_READY', owner: 'Roadside Domain' },
-      { id: 'GAR-017', title: 'SOS & Human Safety Engine', status: 'FOUNDATION_READY', owner: 'Safety Domain' },
+      { id: 'GAR-011', title: 'Garage & Provider Network', status: 'ACTIVE_IMPLEMENTED', owner: 'Provider Domain' },
+      { id: 'GAR-012', title: 'Garage Operations Management', status: 'ACTIVE_IMPLEMENTED', owner: 'Garage Operations Domain' },
+      { id: 'GAR-013', title: 'Booking, Scheduling & Quotes', status: 'ACTIVE_IMPLEMENTED', owner: 'Service Transaction Domain' },
+      { id: 'GAR-014', title: 'Roadside Assistance', status: 'ACTIVE_IMPLEMENTED', owner: 'Roadside Domain' },
+      { id: 'GAR-015', title: 'Towing & Recovery', status: 'ACTIVE_IMPLEMENTED', owner: 'Towing Domain' },
+      { id: 'GAR-016', title: 'Real-Time Dispatch & Matching', status: 'R1_SECURITY_RECONCILED', owner: 'Dispatch Domain' },
+      { id: 'GAR-017', title: 'SOS & Human Safety Engine', status: 'NOT_STARTED', owner: 'Safety Domain' },
     ],
     subsystems: {
       database: {
@@ -146,15 +159,15 @@ apiV1Router.get('/platform/capabilities', (req: Request, res: Response) => {
 });
 
 // 2. Traceability Matrix (GAR-049 §8 /v1/admin/traceability)
-apiV1Router.get('/admin/traceability', (req: Request, res: Response) => {
+apiV1Router.get('/admin/traceability', authenticate(), requirePermission(CanonicalPermission.ADMIN_AUDIT_READ), (req: Request, res: Response) => {
   return res.canonicalSuccess({
-    total_requirements: SPRINT_1_TRACEABILITY_MATRIX.length,
-    matrix: SPRINT_1_TRACEABILITY_MATRIX,
+    total_requirements: SPRINT_1_14_TRACEABILITY_MATRIX.length,
+    matrix: SPRINT_1_14_TRACEABILITY_MATRIX,
   });
 });
 
 // 3. Queue & Background Operations Inspector (GAR-036 §8 /v1/admin/queues)
-apiV1Router.get('/admin/queues', (req: Request, res: Response) => {
+apiV1Router.get('/admin/queues', authenticate(), requirePermission(CanonicalPermission.ADMIN_PLATFORM_MANAGE), (req: Request, res: Response) => {
   const db = getDatabase();
   const recentOutbox = db.prepare(`
     SELECT * FROM outbox_events ORDER BY created_at DESC LIMIT 20;
@@ -177,7 +190,7 @@ apiV1Router.get('/admin/queues', (req: Request, res: Response) => {
 });
 
 // 4. Immutable Audit Log Query (GAR-043 §8 /v1/admin/audit)
-apiV1Router.get('/admin/audit', (req: Request, res: Response) => {
+apiV1Router.get('/admin/audit', authenticate(), requirePermission(CanonicalPermission.ADMIN_AUDIT_READ), (req: Request, res: Response) => {
   const limit = Math.min(Number(req.query.limit) || 25, 100);
   const offset = Number(req.query.offset) || 0;
   const resourceType = req.query.resource_type ? String(req.query.resource_type) : undefined;
@@ -195,12 +208,12 @@ apiV1Router.get('/admin/audit', (req: Request, res: Response) => {
 });
 
 // 5. Feature Flags (GAR-046 §8 /v1/feature-flags)
-apiV1Router.get('/feature-flags', (req: Request, res: Response) => {
+apiV1Router.get('/feature-flags', authenticate(), requirePermission(CanonicalPermission.ADMIN_PLATFORM_MANAGE), (req: Request, res: Response) => {
   const flags = featureFlagManager.getAllFlags();
   return res.canonicalSuccess(flags);
 });
 
-apiV1Router.patch('/feature-flags/:key', (req: Request, res: Response) => {
+apiV1Router.patch('/feature-flags/:key', authenticate(), requirePermission(CanonicalPermission.ADMIN_PLATFORM_MANAGE), (req: Request, res: Response) => {
   const { key } = req.params;
   const { enabled, percentage } = req.body;
 
@@ -226,7 +239,7 @@ apiV1Router.patch('/feature-flags/:key', (req: Request, res: Response) => {
 });
 
 // 6. Secure Media / Evidence Upload (GAR-038 §8)
-apiV1Router.post('/uploads', async (req: Request, res: Response) => {
+apiV1Router.post('/uploads', authenticate(), async (req: Request, res: Response) => {
   const { filename, contentType, dataBase64, classification } = req.body;
 
   if (!filename || !contentType || !dataBase64) {
@@ -268,11 +281,21 @@ apiV1Router.get('/files/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
   const token = req.query.token as string | undefined;
 
-  if (token) {
-    const verified = storageEngine.verifySignedAccessToken(token);
-    if (!verified.valid || verified.fileId !== id) {
-      throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Invalid or expired signed access token', 403);
-    }
+  if (!token) {
+    throw new CanonicalAppError(
+      ErrorCode.NOT_AUTHORIZED,
+      'A signed access token is required for file retrieval',
+      401
+    );
+  }
+
+  const verified = storageEngine.verifySignedAccessToken(token);
+  if (!verified.valid || verified.fileId !== id) {
+    throw new CanonicalAppError(
+      ErrorCode.NOT_AUTHORIZED,
+      'Invalid or expired signed access token',
+      403
+    );
   }
 
   const file = await storageEngine.getFile(id);
@@ -286,7 +309,7 @@ apiV1Router.get('/files/:id', async (req: Request, res: Response) => {
 });
 
 // 7. Test Verification Endpoints (for CI, test suites, and interactive validation)
-apiV1Router.post('/test/idempotency', (req: Request, res: Response) => {
+apiV1Router.post('/test/idempotency', requireNonProduction, authenticate(), requirePermission(CanonicalPermission.ADMIN_PLATFORM_MANAGE), (req: Request, res: Response) => {
   const { action, amount } = req.body;
   const transactionId = `tx_${Date.now()}`;
 
@@ -298,7 +321,7 @@ apiV1Router.post('/test/idempotency', (req: Request, res: Response) => {
   });
 });
 
-apiV1Router.post('/test/emit-event', (req: Request, res: Response) => {
+apiV1Router.post('/test/emit-event', requireNonProduction, authenticate(), requirePermission(CanonicalPermission.ADMIN_PLATFORM_MANAGE), (req: Request, res: Response) => {
   const { eventType, payload } = req.body;
 
   const event = createCanonicalEventEnvelope({
@@ -320,7 +343,7 @@ apiV1Router.post('/test/emit-event', (req: Request, res: Response) => {
   });
 });
 
-apiV1Router.post('/test/enqueue-job', (req: Request, res: Response) => {
+apiV1Router.post('/test/enqueue-job', requireNonProduction, authenticate(), requirePermission(CanonicalPermission.ADMIN_PLATFORM_MANAGE), (req: Request, res: Response) => {
   const { jobName, payload } = req.body;
 
   const jobId = jobEngine.enqueue(

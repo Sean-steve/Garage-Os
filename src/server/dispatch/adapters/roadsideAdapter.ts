@@ -95,6 +95,16 @@ export class RoadsideDispatchAdapter implements DispatchDomainAdapter {
     }
     const requestId = req.id;
 
+    const providerPricing = db
+      .prepare('SELECT callout_fee, currency FROM service_providers WHERE id = ? LIMIT 1')
+      .get(params.candidate.provider_id) as
+      | { callout_fee?: number | null; currency?: string | null }
+      | undefined;
+    const hasConfiguredCallout =
+      providerPricing?.callout_fee != null &&
+      Number.isFinite(providerPricing.callout_fee) &&
+      providerPricing.callout_fee >= 0;
+
     const offer: RoadsideProviderOfferEntity = {
       id: offerId,
       request_id: requestId,
@@ -103,15 +113,30 @@ export class RoadsideDispatchAdapter implements DispatchDomainAdapter {
       status: ProviderOfferStatus.OFFERED,
       offered_at: now,
       expires_at: expiresAt,
-      estimated_arrival_minutes: params.etaMinutes || (params.candidate.eta_seconds ? Math.round(params.candidate.eta_seconds / 60) : 25),
-      callout_charge_minor: 350000, // 3500 KES default callout
-      currency: 'KES',
+      estimated_arrival_minutes:
+        params.etaMinutes ??
+        (params.candidate.eta_seconds != null
+          ? Math.round(params.candidate.eta_seconds / 60)
+          : null),
+      callout_charge_minor: hasConfiguredCallout
+        ? Math.round(providerPricing!.callout_fee! * 100)
+        : 0,
+      currency: providerPricing?.currency || 'KES',
       metadata_json: JSON.stringify({
         dispatch_request_id: params.dispatchRequestId,
         dispatch_attempt_id: params.attemptId,
         responder_reference_id: params.candidate.responder_reference_id,
         responder_type: params.candidate.responder_type,
         overall_score: params.candidate.overall_score,
+        distance_type: params.candidate.distance_type,
+        eta_source: params.candidate.eta_source,
+        eta_status:
+          params.etaMinutes != null || params.candidate.eta_seconds != null
+            ? 'ROUTED_OR_PROVIDER_CONFIRMED'
+            : 'UNAVAILABLE',
+        pricing_status: hasConfiguredCallout
+          ? 'PROVIDER_CONFIGURED_CALLOUT'
+          : 'UNQUOTED',
       }),
     };
 
@@ -132,9 +157,10 @@ export class RoadsideDispatchAdapter implements DispatchDomainAdapter {
     const requestId = req ? req.id : params.sourceRequestId;
 
     const assignmentId = generateCanonicalId('rsa');
-    const etaMinutes = params.candidate.eta_seconds
-      ? Math.round(params.candidate.eta_seconds / 60)
-      : 25;
+    const etaMinutes =
+      params.candidate.eta_seconds != null
+        ? Math.round(params.candidate.eta_seconds / 60)
+        : null;
 
     const assignment: RoadsideAssignmentEntity = {
       id: assignmentId,

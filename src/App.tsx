@@ -10,6 +10,10 @@ import { BentoOverview } from './client/components/BentoOverview';
 import { BentoFuelCosts } from './client/components/BentoFuelCosts';
 import { BentoMaintenance } from './client/components/BentoMaintenance';
 import { BentoIssues } from './client/components/BentoIssues';
+import { BentoBookings } from './client/components/BentoBookings';
+import { BentoWorkshop } from './client/components/BentoWorkshop';
+import { BentoMobility } from './client/components/BentoMobility';
+import { LoginScreen } from './client/components/LoginScreen';
 import { BentoTimeline } from './client/components/BentoTimeline';
 import { BentoPassport } from './client/components/BentoPassport';
 import { BentoQueues } from './client/components/BentoQueues';
@@ -38,6 +42,58 @@ export default function App() {
   const [loading, setLoading] = useState<boolean>(true);
   const [vehicles, setVehicles] = useState<VehicleSummary[]>([]);
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>('veh_seed_car_01');
+  const [sessionActor, setSessionActor] = useState<any | null | undefined>(undefined);
+
+  const isPlatformAdmin = Boolean(
+    sessionActor?.platform_roles?.some((role: string) =>
+      ['PLATFORM_ADMIN'].includes(role)
+    )
+  );
+  const isProviderActor = Boolean(
+    sessionActor?.memberships?.some((membership: any) =>
+      ['GARAGE', 'AUTOMOTIVE_SERVICE_PROVIDER', 'ROADSIDE_PROVIDER', 'TOWING_PROVIDER'].includes(
+        membership.organization_type
+      )
+    )
+  );
+
+  const loadSession = useCallback(async () => {
+    try {
+      const response = await fetch('/api/v1/me', { credentials: 'same-origin' });
+      if (!response.ok) {
+        setSessionActor(null);
+        return;
+      }
+      const payload = await response.json();
+      setSessionActor(payload.data || payload);
+    } catch {
+      setSessionActor(null);
+    }
+  }, []);
+
+  const handleLogout = useCallback(async () => {
+    try {
+      await fetch('/api/v1/auth/logout', {
+        method: 'POST',
+        credentials: 'same-origin',
+      });
+    } finally {
+      setSessionActor(null);
+      setVehicles([]);
+      setQueueStatus(null);
+      setActiveTab('overview');
+    }
+  }, []);
+
+  useEffect(() => {
+    loadSession();
+  }, [loadSession]);
+
+  useEffect(() => {
+    if (!isPlatformAdmin && ['queues', 'flags', 'audit', 'traceability'].includes(activeTab)) {
+      setActiveTab('overview');
+    }
+  }, [isPlatformAdmin, activeTab]);
 
   // Load vehicles list
   const fetchVehicles = useCallback(async () => {
@@ -130,28 +186,36 @@ export default function App() {
     }
   }, []);
 
-  // Initial load
+  // Session-aware initial load. Administrative data is never requested for ordinary users.
   useEffect(() => {
+    if (!sessionActor) return;
+
     async function init() {
       setLoading(true);
-      await Promise.all([
-        fetchCapabilities(),
-        fetchVehicles(),
-        fetchQueues(),
-        fetchFlags(),
-        fetchAudit(),
-        fetchTraceability(),
-      ]);
+      const tasks: Array<Promise<unknown>> = [fetchCapabilities(), fetchVehicles()];
+      if (isPlatformAdmin) {
+        tasks.push(fetchQueues(), fetchFlags(), fetchAudit(), fetchTraceability());
+      }
+      await Promise.all(tasks);
       setLoading(false);
     }
     init();
 
-    // Auto-refresh queues every 10s
+    if (!isPlatformAdmin) return;
     const interval = setInterval(() => {
       fetchQueues();
     }, 10000);
     return () => clearInterval(interval);
-  }, [fetchCapabilities, fetchVehicles, fetchQueues, fetchFlags, fetchAudit, fetchTraceability]);
+  }, [
+    sessionActor,
+    isPlatformAdmin,
+    fetchCapabilities,
+    fetchVehicles,
+    fetchQueues,
+    fetchFlags,
+    fetchAudit,
+    fetchTraceability,
+  ]);
 
   // Actions
   const handleEmitTestEvent = async () => {
@@ -245,6 +309,18 @@ export default function App() {
     }
   };
 
+  if (sessionActor === undefined) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-300 flex items-center justify-center">
+        <div className="text-xs font-bold uppercase tracking-[0.2em]">Validating session…</div>
+      </div>
+    );
+  }
+
+  if (sessionActor === null) {
+    return <LoginScreen onAuthenticated={loadSession} />;
+  }
+
   const systemHealth = capabilities?.lifecycle_state || 'UP';
 
   return (
@@ -254,6 +330,15 @@ export default function App() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         systemHealth={systemHealth}
+        userName={sessionActor.profile?.display_name || sessionActor.email || 'Garage OS User'}
+        userRole={
+          sessionActor.platform_roles?.[0] ||
+          sessionActor.active_membership?.role ||
+          'Vehicle Owner'
+        }
+        showAdminTools={isPlatformAdmin}
+        showProviderTools={isProviderActor}
+        onLogout={handleLogout}
       />
 
       {/* Main Tab View */}
@@ -267,6 +352,7 @@ export default function App() {
             onEnqueueJob={handleEnqueueJob}
             onTestIdempotency={handleTestIdempotency}
             actionStatus={actionStatus}
+            showAdminControls={isPlatformAdmin}
           />
         )}
 
@@ -303,6 +389,28 @@ export default function App() {
               setActionStatus(msg);
               setTimeout(() => setActionStatus(null), 4000);
             }}
+          />
+        )}
+
+        {activeTab === 'bookings' && (
+          <BentoBookings
+            vehicles={vehicles}
+            selectedVehicleId={selectedVehicleId}
+            onSelectVehicle={setSelectedVehicleId}
+            onNotify={setActionStatus}
+          />
+        )}
+
+        {activeTab === 'workshop' && isProviderActor && (
+          <BentoWorkshop onNotify={setActionStatus} />
+        )}
+
+        {activeTab === 'mobility' && (
+          <BentoMobility
+            vehicles={vehicles}
+            selectedVehicleId={selectedVehicleId}
+            onSelectVehicle={setSelectedVehicleId}
+            onNotify={setActionStatus}
           />
         )}
 

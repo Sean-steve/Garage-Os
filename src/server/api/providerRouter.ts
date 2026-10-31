@@ -39,6 +39,7 @@ import {
 import { CanonicalAppError, ErrorCode } from '../../shared/errors';
 import { assertAuthorized } from '../identity/policyEngine';
 import { CanonicalPermission } from '../identity/rbac';
+import { getDatabase } from '../database/connection';
 
 export const providerRouter = Router();
 
@@ -94,6 +95,32 @@ providerRouter.get('/providers/taxonomy', async (req: Request, res: Response, ne
   try {
     const categories = providerService.getTaxonomyCategories();
     res.json({ categories });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/v1/providers/mine
+ * Resolve provider profiles that belong to the authenticated actor's active organization memberships.
+ */
+providerRouter.get('/providers/mine', authenticate(), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const actor = getActor(req);
+    const organizationIds = actor.memberships
+      .filter((membership) => membership.status === 'ACTIVE')
+      .map((membership) => membership.organization_id);
+
+    if (organizationIds.length === 0) {
+      return res.json({ providers: [] });
+    }
+
+    const placeholders = organizationIds.map(() => '?').join(', ');
+    const providers = getDatabase()
+      .prepare(`SELECT * FROM service_providers WHERE organization_id IN (${placeholders}) ORDER BY name ASC`)
+      .all(...organizationIds);
+
+    res.json({ providers });
   } catch (error) {
     next(error);
   }
