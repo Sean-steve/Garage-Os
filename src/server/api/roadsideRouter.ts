@@ -273,7 +273,7 @@ roadsideRouter.get('/incidents/:id/activity', (req: Request, res: Response, next
 roadsideRouter.post('/offers/:id/respond', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
-    const offer = roadsideRepository.getOfferById(req.params.id);
+    const offer = roadsideRepository.getProviderOfferById(req.params.id);
     if (!offer) throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, 'Roadside offer not found', 404);
     assertProviderAccess(actor, offer.provider_id);
     const { accept, decline_reason, eta_minutes, callout_charge_minor, assigned_technician_name, assigned_technician_phone, assigned_vehicle_reg } = req.body;
