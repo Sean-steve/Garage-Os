@@ -9,6 +9,7 @@ import { getCurrentUtcIsoString } from '../domain/time';
 import { generateCanonicalId } from '../domain/id';
 import { recordAuditEvent } from '../security/audit';
 import { safetyRepository } from './safetyRepository';
+import { trustedContactService } from './trustedContactService';
 import {
   AddEmergencyContactInput,
   EmergencyContact,
@@ -332,6 +333,7 @@ export class SafetyService {
         },
         db
       );
+    trustedContactService.revokeContactGrants(contactId);
     });
   }
 
