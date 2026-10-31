@@ -3,6 +3,7 @@ import { authenticate } from './authMiddleware';
 import { safetyService } from '../safety/safetyService';
 import { SafetyIncidentLevel, SosSafetyCheckResponse } from '../safety/types';
 import { sosService } from '../safety/sosService';
+import { trustedContactService } from '../safety/trustedContactService';
 
 export const safetyRouter = Router();
 
@@ -149,6 +150,24 @@ safetyRouter.post('/sos/incidents/:id/close', (req: Request, res: Response, next
   try {
     const aggregate = sosService.close(req.actor!, req.params.id, req.body?.reason);
     res.json({ success: true, data: aggregate });
+  } catch (err) {
+    next(err);
+  }
+});
+
+safetyRouter.get('/sos/incidents/:id/trusted-contact-access', (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const grants = trustedContactService.listOwnerIncidentGrants(req.actor!.user_id, req.params.id);
+    res.json({ success: true, data: grants });
+  } catch (err) {
+    next(err);
+  }
+});
+
+safetyRouter.post('/sos/incidents/:id/trusted-contact-access/revoke', (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const revoked = trustedContactService.revokeOwnerIncidentGrants(req.actor!.user_id, req.params.id);
+    res.json({ success: true, data: { revoked_grant_count: revoked } });
   } catch (err) {
     next(err);
   }
