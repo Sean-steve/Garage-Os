@@ -114,10 +114,12 @@ export class MarketplaceFulfillmentRepository{
       v.restock_quantity,v.condition_at_return,v.unit_price_minor,v.refund_amount_minor,v.notes);
     return v;
   }
-  updateReturnItemReceipt(id:string,received:number,restock:number,condition:string,notes:string|null){
+  updateReturnItemReceipt(id:string,received:number,restock:number,condition:string,notes:string|null,refundAmountMinor:number){
     getDatabase().prepare(`
-      UPDATE marketplace_return_items SET received_quantity=?,restock_quantity=?,condition_at_return=?,notes=? WHERE id=?
-    `).run(received,restock,condition,notes,id);
+      UPDATE marketplace_return_items
+      SET received_quantity=?,restock_quantity=?,condition_at_return=?,notes=?,refund_amount_minor=?
+      WHERE id=?
+    `).run(received,restock,condition,notes,refundAmountMinor,id);
   }
   listReturnItems(returnId:string):MarketplaceReturnItem[]{
     return (getDatabase().prepare('SELECT * FROM marketplace_return_items WHERE return_id=? ORDER BY id').all(returnId) as any[]).map(asReturnItem);
