@@ -10,6 +10,8 @@ import { BentoOverview } from './client/components/BentoOverview';
 import { BentoFuelCosts } from './client/components/BentoFuelCosts';
 import { BentoMaintenance } from './client/components/BentoMaintenance';
 import { BentoIssues } from './client/components/BentoIssues';
+import { BentoBookings } from './client/components/BentoBookings';
+import { BentoMobility } from './client/components/BentoMobility';
 import { BentoTimeline } from './client/components/BentoTimeline';
 import { BentoPassport } from './client/components/BentoPassport';
 import { BentoQueues } from './client/components/BentoQueues';
@@ -303,6 +305,24 @@ export default function App() {
               setActionStatus(msg);
               setTimeout(() => setActionStatus(null), 4000);
             }}
+          />
+        )}
+
+        {activeTab === 'bookings' && (
+          <BentoBookings
+            vehicles={vehicles}
+            selectedVehicleId={selectedVehicleId}
+            onSelectVehicle={setSelectedVehicleId}
+            onNotify={setActionStatus}
+          />
+        )}
+
+        {activeTab === 'mobility' && (
+          <BentoMobility
+            vehicles={vehicles}
+            selectedVehicleId={selectedVehicleId}
+            onSelectVehicle={setSelectedVehicleId}
+            onNotify={setActionStatus}
           />
         )}
 
