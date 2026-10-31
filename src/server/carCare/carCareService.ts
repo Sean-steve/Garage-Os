@@ -311,7 +311,7 @@ export class CarCareService {
           subject_ids:{vehicle:vehicleId,personalization_evaluation:evaluation.id},
           actor_id:actor.user_id,
           actor_type:actor.type||CanonicalActorType.VEHICLE_OWNER,
-          provenance_class:DataProvenanceClass.SYSTEM_DERIVED,
+          provenance_class:DataProvenanceClass.DERIVED_DETERMINISTIC,
           payload:{
             vehicle_id:vehicleId,
             evaluation_id:evaluation.id,
