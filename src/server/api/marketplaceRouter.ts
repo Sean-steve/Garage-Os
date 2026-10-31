@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { authenticate } from './authMiddleware';
 import { marketplaceService } from '../marketplace/marketplaceService';
+import { marketplaceDiscoveryService } from '../marketplaceDiscovery/marketplaceDiscoveryService';
 import { CanonicalAppError, ErrorCode } from '../../shared/errors';
 
 export const marketplaceRouter=Router();
@@ -13,7 +14,7 @@ marketplaceRouter.get('/marketplace/categories',(req:Request,res:Response,next:N
 
 marketplaceRouter.get('/marketplace/search',(req:Request,res:Response,next:NextFunction)=>{
   try{
-    res.canonicalSuccess(marketplaceService.search({
+    res.canonicalSuccess(marketplaceDiscoveryService.search(req.actor!,{
       query:typeof req.query.query==='string'?req.query.query:undefined,
       category:typeof req.query.category==='string'?req.query.category:undefined,
       product_type:typeof req.query.product_type==='string'?req.query.product_type as any:undefined,
@@ -24,6 +25,9 @@ marketplaceRouter.get('/marketplace/search',(req:Request,res:Response,next:NextF
       max_price_minor:req.query.max_price_minor===undefined?undefined:Number(req.query.max_price_minor),
       in_stock_only:String(req.query.in_stock_only||'').toLowerCase()==='true',
       store_slug:typeof req.query.store_slug==='string'?req.query.store_slug:undefined,
+      vehicle_id:typeof req.query.vehicle_id==='string'?req.query.vehicle_id:undefined,
+      include_unknown_fitment:String(req.query.include_unknown_fitment||'true').toLowerCase()!=='false',
+      sort:typeof req.query.sort==='string'?req.query.sort as any:undefined,
       limit:req.query.limit===undefined?undefined:Number(req.query.limit),
       offset:req.query.offset===undefined?undefined:Number(req.query.offset),
     }));

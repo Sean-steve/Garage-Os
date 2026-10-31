@@ -5610,6 +5610,64 @@ export const MIGRATIONS: Migration[] = [
         DROP TABLE IF EXISTS marketplace_reviews;
       `);
     },
+  },
+  {
+    id: '029_marketplace_search_merchandising_recommendations',
+    name: 'Marketplace Search Quality, Merchandising & Recommendations (Sprint 28)',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS marketplace_merchandising_collections (
+          id TEXT PRIMARY KEY,
+          owner_type TEXT NOT NULL,
+          store_id TEXT REFERENCES marketplace_stores(id) ON DELETE CASCADE,
+          slug TEXT NOT NULL,
+          title TEXT NOT NULL,
+          description TEXT,
+          surface TEXT NOT NULL,
+          category_code TEXT,
+          status TEXT NOT NULL,
+          source_label TEXT NOT NULL,
+          starts_at TEXT,
+          ends_at TEXT,
+          created_by TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          CHECK (owner_type IN ('PLATFORM','STORE')),
+          CHECK (
+            (owner_type='PLATFORM' AND store_id IS NULL AND source_label='PLATFORM_CURATED')
+            OR
+            (owner_type='STORE' AND store_id IS NOT NULL AND source_label='SELLER_CURATED')
+          ),
+          CHECK (surface IN ('HOME','STORE','CATEGORY')),
+          CHECK (status IN ('DRAFT','ACTIVE','PAUSED','RETIRED')),
+          CHECK ((surface='CATEGORY' AND category_code IS NOT NULL) OR surface!='CATEGORY'),
+          CHECK ((owner_type='STORE' AND surface='STORE') OR owner_type='PLATFORM')
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_marketplace_merchandising_slug
+          ON marketplace_merchandising_collections(owner_type,COALESCE(store_id,''),slug);
+        CREATE INDEX IF NOT EXISTS idx_marketplace_merchandising_public
+          ON marketplace_merchandising_collections(status,surface,category_code,starts_at,ends_at);
+
+        CREATE TABLE IF NOT EXISTS marketplace_merchandising_items (
+          id TEXT PRIMARY KEY,
+          collection_id TEXT NOT NULL REFERENCES marketplace_merchandising_collections(id) ON DELETE CASCADE,
+          listing_id TEXT NOT NULL REFERENCES marketplace_listings(id) ON DELETE RESTRICT,
+          sort_order INTEGER NOT NULL,
+          added_by TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          created_at TEXT NOT NULL,
+          UNIQUE(collection_id,listing_id),
+          CHECK (sort_order BETWEEN 0 AND 10000)
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_merchandising_items_order
+          ON marketplace_merchandising_items(collection_id,sort_order,id);
+      `);
+    },
+    down: (db) => {
+      db.exec(`
+        DROP TABLE IF EXISTS marketplace_merchandising_items;
+        DROP TABLE IF EXISTS marketplace_merchandising_collections;
+      `);
+    },
   }
 ];
 
