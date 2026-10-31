@@ -18,7 +18,7 @@ import { storageEngine } from '../storage/storageEngine';
 import { listAuditEvents, recordAuditEvent } from '../security/audit';
 import { featureFlagManager } from '../featureFlags/flags';
 import { metrics } from '../observability/metrics';
-import { SPRINT_1_TRACEABILITY_MATRIX, R1_SPRINT_1_TO_14_TRACEABILITY_MATRIX, SPRINT_15_TRACEABILITY_MATRIX, SPRINT_16_TRACEABILITY_MATRIX, SPRINT_17_TRACEABILITY_MATRIX, SPRINT_18_TRACEABILITY_MATRIX, SPRINT_19_TRACEABILITY_MATRIX, SPRINT_20_TRACEABILITY_MATRIX, SPRINT_21_TRACEABILITY_MATRIX } from '../../shared/traceability';
+import { SPRINT_1_TRACEABILITY_MATRIX, R1_SPRINT_1_TO_14_TRACEABILITY_MATRIX, SPRINT_15_TRACEABILITY_MATRIX, SPRINT_16_TRACEABILITY_MATRIX, SPRINT_17_TRACEABILITY_MATRIX, SPRINT_18_TRACEABILITY_MATRIX, SPRINT_19_TRACEABILITY_MATRIX, SPRINT_20_TRACEABILITY_MATRIX, SPRINT_21_TRACEABILITY_MATRIX, SPRINT_22_TRACEABILITY_MATRIX } from '../../shared/traceability';
 import { PlatformLifecycleState, CanonicalActorType } from '../../shared/types';
 import { CanonicalAppError, ErrorCode } from '../../shared/errors';
 import { DataProvenanceClass } from '../../shared/provenance';
@@ -129,12 +129,12 @@ apiV1Router.get('/platform/capabilities', (req: Request, res: Response) => {
 
   const capabilities = {
     platform_name: 'Garage OS',
-    version: '21.0.0-sprint21',
+    version: '22.0.0-sprint22',
     environment: process.env.NODE_ENV || 'development',
     lifecycle_state: PlatformLifecycleState.ACTIVE,
     architecture_baseline: 'GAR-000-to-GAR-051',
-    active_sprint: 'Sprint 21: Pre-Trip & Trip Guardian Foundation (GAR-019)',
-    next_sprint: 'Sprint 22: Marketplace Foundation (GAR-021)',
+    active_sprint: 'Sprint 22: Marketplace Foundation (GAR-021)',
+    next_sprint: 'Sprint 23: Vehicle Compatibility & Fitment (GAR-022)',
     constitutional_laws_enforced: 12,
     config: getSanitizedConfig(),
     domains: [
@@ -156,6 +156,7 @@ apiV1Router.get('/platform/capabilities', (req: Request, res: Response) => {
       { id: 'GAR-018', title: 'Accident Management', status: 'ACTIVE_IMPLEMENTED_SPRINT_18', owner: 'Accident Domain' },
       { id: 'GAR-019', title: 'Trip Guardian & Journey Safety', status: 'FOUNDATION_IMPLEMENTED_SPRINT_21', owner: 'Trip Guardian Domain' },
       { id: 'GAR-020', title: 'Car Care, Education & Owner Guidance', status: 'PERSONALIZED_CARE_IMPLEMENTED_SPRINT_20', owner: 'Car Care Domain' },
+      { id: 'GAR-021', title: 'Automotive Marketplace', status: 'FOUNDATION_IMPLEMENTED_SPRINT_22', owner: 'Marketplace Domain' },
     ],
     subsystems: {
       database: {
@@ -195,12 +196,12 @@ apiV1Router.get('/platform/capabilities', (req: Request, res: Response) => {
 
 // 2. Traceability Matrix (GAR-049 §8 /v1/admin/traceability)
 apiV1Router.get('/admin/traceability', authenticate(), requirePlatformAdmin, (req: Request, res: Response) => {
-  const matrix = [...SPRINT_1_TRACEABILITY_MATRIX, ...R1_SPRINT_1_TO_14_TRACEABILITY_MATRIX, ...SPRINT_15_TRACEABILITY_MATRIX, ...SPRINT_16_TRACEABILITY_MATRIX, ...SPRINT_17_TRACEABILITY_MATRIX, ...SPRINT_18_TRACEABILITY_MATRIX, ...SPRINT_19_TRACEABILITY_MATRIX, ...SPRINT_20_TRACEABILITY_MATRIX, ...SPRINT_21_TRACEABILITY_MATRIX];
+  const matrix = [...SPRINT_1_TRACEABILITY_MATRIX, ...R1_SPRINT_1_TO_14_TRACEABILITY_MATRIX, ...SPRINT_15_TRACEABILITY_MATRIX, ...SPRINT_16_TRACEABILITY_MATRIX, ...SPRINT_17_TRACEABILITY_MATRIX, ...SPRINT_18_TRACEABILITY_MATRIX, ...SPRINT_19_TRACEABILITY_MATRIX, ...SPRINT_20_TRACEABILITY_MATRIX, ...SPRINT_21_TRACEABILITY_MATRIX, ...SPRINT_22_TRACEABILITY_MATRIX];
   return res.canonicalSuccess({
     total_requirements: matrix.length,
     matrix,
     traceability: matrix,
-    certification_phase: 'R1+S15+S16+S17+S18+S19+S20+S21',
+    certification_phase: 'R1+S15+S16+S17+S18+S19+S20+S21+S22',
   });
 });
 
