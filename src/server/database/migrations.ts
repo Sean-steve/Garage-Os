@@ -4766,6 +4766,197 @@ export const MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    id: '023_marketplace_foundation',
+    name: 'Automotive Marketplace Foundation (GAR-021)',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS marketplace_stores (
+          id TEXT PRIMARY KEY,
+          organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+          provider_id TEXT REFERENCES service_providers(id) ON DELETE SET NULL,
+          slug TEXT UNIQUE NOT NULL,
+          display_name TEXT NOT NULL,
+          description TEXT,
+          support_phone TEXT,
+          support_email TEXT,
+          status TEXT NOT NULL DEFAULT 'DRAFT',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          CHECK (status IN ('DRAFT','ACTIVE','PAUSED','SUSPENDED'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_stores_org
+          ON marketplace_stores(organization_id, status);
+
+        CREATE TABLE IF NOT EXISTS marketplace_categories (
+          id TEXT PRIMARY KEY,
+          code TEXT UNIQUE NOT NULL,
+          parent_id TEXT REFERENCES marketplace_categories(id) ON DELETE RESTRICT,
+          name TEXT NOT NULL,
+          description TEXT,
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          is_active INTEGER NOT NULL DEFAULT 1,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_categories_parent
+          ON marketplace_categories(parent_id, sort_order);
+
+        CREATE TABLE IF NOT EXISTS marketplace_products (
+          id TEXT PRIMARY KEY,
+          store_id TEXT NOT NULL REFERENCES marketplace_stores(id) ON DELETE RESTRICT,
+          category_id TEXT NOT NULL REFERENCES marketplace_categories(id) ON DELETE RESTRICT,
+          product_type TEXT NOT NULL,
+          seller_sku TEXT NOT NULL,
+          title TEXT NOT NULL,
+          description TEXT NOT NULL,
+          brand TEXT,
+          manufacturer_part_number TEXT,
+          condition TEXT NOT NULL,
+          authenticity_claim TEXT NOT NULL DEFAULT 'UNKNOWN',
+          authenticity_verification_status TEXT NOT NULL DEFAULT 'NOT_VERIFIED',
+          warranty_summary TEXT,
+          status TEXT NOT NULL DEFAULT 'DRAFT',
+          fitment_status TEXT NOT NULL DEFAULT 'UNKNOWN',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          UNIQUE(store_id, seller_sku),
+          CHECK (product_type IN ('PART','TYRE','ACCESSORY','CONSUMABLE','TOOL','ELECTRONICS','OTHER')),
+          CHECK (condition IN ('NEW','USED','REMANUFACTURED')),
+          CHECK (authenticity_claim IN ('SELLER_CLAIMED_OEM','SELLER_CLAIMED_AFTERMARKET','GENERIC','UNKNOWN')),
+          CHECK (authenticity_verification_status='NOT_VERIFIED'),
+          CHECK (status IN ('DRAFT','PUBLISHED','PAUSED','RETIRED')),
+          CHECK (fitment_status='UNKNOWN')
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_products_store
+          ON marketplace_products(store_id, status);
+        CREATE INDEX IF NOT EXISTS idx_marketplace_products_category
+          ON marketplace_products(category_id, product_type, status);
+
+        CREATE TABLE IF NOT EXISTS marketplace_listings (
+          id TEXT PRIMARY KEY,
+          store_id TEXT NOT NULL REFERENCES marketplace_stores(id) ON DELETE RESTRICT,
+          product_id TEXT NOT NULL REFERENCES marketplace_products(id) ON DELETE RESTRICT,
+          status TEXT NOT NULL DEFAULT 'DRAFT',
+          price_minor INTEGER NOT NULL,
+          compare_at_price_minor INTEGER,
+          currency TEXT NOT NULL,
+          inventory_tracking TEXT NOT NULL DEFAULT 'NONE',
+          stock_quantity INTEGER,
+          inventory_status TEXT NOT NULL DEFAULT 'UNKNOWN',
+          fulfillment_modes_json TEXT NOT NULL DEFAULT '[]',
+          published_at TEXT,
+          paused_at TEXT,
+          retired_at TEXT,
+          version INTEGER NOT NULL DEFAULT 1,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          UNIQUE(product_id),
+          CHECK (status IN ('DRAFT','PUBLISHED','PAUSED','RETIRED')),
+          CHECK (price_minor >= 0),
+          CHECK (compare_at_price_minor IS NULL OR compare_at_price_minor >= price_minor),
+          CHECK (length(currency)=3),
+          CHECK (inventory_tracking IN ('NONE','QUANTITY')),
+          CHECK (stock_quantity IS NULL OR stock_quantity >= 0),
+          CHECK (inventory_status IN ('IN_STOCK','LOW_STOCK','OUT_OF_STOCK','MADE_TO_ORDER','UNKNOWN'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_listings_store
+          ON marketplace_listings(store_id, status);
+        CREATE INDEX IF NOT EXISTS idx_marketplace_listings_price
+          ON marketplace_listings(currency, price_minor, status);
+
+        CREATE TABLE IF NOT EXISTS marketplace_listing_media (
+          id TEXT PRIMARY KEY,
+          listing_id TEXT NOT NULL REFERENCES marketplace_listings(id) ON DELETE CASCADE,
+          file_object_id TEXT NOT NULL REFERENCES file_objects(id) ON DELETE RESTRICT,
+          media_role TEXT NOT NULL,
+          alt_text TEXT,
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          is_primary INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL,
+          UNIQUE(listing_id, file_object_id),
+          CHECK (media_role IN ('IMAGE','DOCUMENT'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_listing_media
+          ON marketplace_listing_media(listing_id, sort_order);
+
+        CREATE TABLE IF NOT EXISTS marketplace_listing_price_snapshots (
+          id TEXT PRIMARY KEY,
+          listing_id TEXT NOT NULL REFERENCES marketplace_listings(id) ON DELETE CASCADE,
+          version INTEGER NOT NULL,
+          price_minor INTEGER NOT NULL,
+          compare_at_price_minor INTEGER,
+          currency TEXT NOT NULL,
+          inventory_status TEXT NOT NULL,
+          captured_reason TEXT NOT NULL,
+          captured_by TEXT NOT NULL,
+          captured_at TEXT NOT NULL,
+          UNIQUE(listing_id, version, captured_reason),
+          CHECK (price_minor >= 0),
+          CHECK (length(currency)=3),
+          CHECK (captured_reason IN ('CREATED','UPDATED','PUBLISHED'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_price_snapshots
+          ON marketplace_listing_price_snapshots(listing_id, captured_at DESC);
+
+        CREATE TABLE IF NOT EXISTS marketplace_listing_search_projection (
+          listing_id TEXT PRIMARY KEY REFERENCES marketplace_listings(id) ON DELETE CASCADE,
+          product_id TEXT NOT NULL,
+          store_id TEXT NOT NULL,
+          store_slug TEXT NOT NULL,
+          store_name TEXT NOT NULL,
+          title TEXT NOT NULL,
+          description TEXT NOT NULL,
+          category_code TEXT NOT NULL,
+          category_name TEXT NOT NULL,
+          product_type TEXT NOT NULL,
+          brand TEXT,
+          condition TEXT NOT NULL,
+          price_minor INTEGER NOT NULL,
+          compare_at_price_minor INTEGER,
+          currency TEXT NOT NULL,
+          inventory_status TEXT NOT NULL,
+          fulfillment_modes_json TEXT NOT NULL,
+          primary_media_file_id TEXT,
+          authenticity_claim TEXT NOT NULL,
+          authenticity_verification_status TEXT NOT NULL,
+          fitment_status TEXT NOT NULL,
+          search_text TEXT NOT NULL,
+          is_discoverable INTEGER NOT NULL DEFAULT 0,
+          updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_search_discoverable
+          ON marketplace_listing_search_projection(is_discoverable, category_code, product_type);
+        CREATE INDEX IF NOT EXISTS idx_marketplace_search_price
+          ON marketplace_listing_search_projection(is_discoverable, currency, price_minor);
+
+        INSERT OR IGNORE INTO marketplace_categories
+          (id,code,parent_id,name,description,sort_order,is_active,created_at,updated_at)
+        VALUES
+          ('mcat_parts','PARTS',NULL,'Parts','Replacement and repair parts',10,1,'2026-10-31T00:00:00.000Z','2026-10-31T00:00:00.000Z'),
+          ('mcat_tyres','TYRES',NULL,'Tyres','Vehicle tyres and tyre-related goods',20,1,'2026-10-31T00:00:00.000Z','2026-10-31T00:00:00.000Z'),
+          ('mcat_batteries','BATTERIES',NULL,'Batteries','Vehicle batteries and battery accessories',30,1,'2026-10-31T00:00:00.000Z','2026-10-31T00:00:00.000Z'),
+          ('mcat_fluids','FLUIDS',NULL,'Fluids & Lubricants','Oils, coolants, brake fluids and related consumables',40,1,'2026-10-31T00:00:00.000Z','2026-10-31T00:00:00.000Z'),
+          ('mcat_accessories','ACCESSORIES',NULL,'Accessories','Vehicle accessories',50,1,'2026-10-31T00:00:00.000Z','2026-10-31T00:00:00.000Z'),
+          ('mcat_electronics','ELECTRONICS',NULL,'Electronics','Dashcams, infotainment and automotive electronics',60,1,'2026-10-31T00:00:00.000Z','2026-10-31T00:00:00.000Z'),
+          ('mcat_care','CAR_CARE',NULL,'Car Care Products','Cleaning and detailing products',70,1,'2026-10-31T00:00:00.000Z','2026-10-31T00:00:00.000Z'),
+          ('mcat_tools','TOOLS',NULL,'Tools','Automotive tools and equipment',80,1,'2026-10-31T00:00:00.000Z','2026-10-31T00:00:00.000Z'),
+          ('mcat_brakes','BRAKE_PARTS','mcat_parts','Brake Parts','Brake system replacement parts',11,1,'2026-10-31T00:00:00.000Z','2026-10-31T00:00:00.000Z'),
+          ('mcat_filters','FILTERS','mcat_parts','Filters','Oil, air, cabin and fuel filters',12,1,'2026-10-31T00:00:00.000Z','2026-10-31T00:00:00.000Z');
+      `);
+    },
+    down: (db) => {
+      db.exec(`
+        DROP TABLE IF EXISTS marketplace_listing_search_projection;
+        DROP TABLE IF EXISTS marketplace_listing_price_snapshots;
+        DROP TABLE IF EXISTS marketplace_listing_media;
+        DROP TABLE IF EXISTS marketplace_listings;
+        DROP TABLE IF EXISTS marketplace_products;
+        DROP TABLE IF EXISTS marketplace_categories;
+        DROP TABLE IF EXISTS marketplace_stores;
+      `);
+    },
+  },
 ];
 
 /**
