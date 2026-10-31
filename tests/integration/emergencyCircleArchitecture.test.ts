@@ -51,7 +51,7 @@ describe('Emergency Circle & Human Safety Foundation (GAR-017)', () => {
     insertUser.run(other.user_id, other.email, 'Other Owner', '2026-10-31T00:00:00.000Z', '2026-10-31T00:00:00.000Z');
   });
 
-  it('applies the canonical Sprint 15 safety schema without creating the SOS engine', () => {
+  it('preserves the canonical Sprint 15 safety schema as the SOS engine evolves', () => {
     const tables = db.prepare(
       "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"
     ).all().map((row: any) => row.name);
@@ -61,20 +61,22 @@ describe('Emergency Circle & Human Safety Foundation (GAR-017)', () => {
     assert.ok(tables.includes('human_safety_preferences'));
     assert.ok(tables.includes('safety_configuration_history'));
 
-    // Sprint 15 deliberately does not implement activation/runtime SOS incident state.
-    assert.equal(tables.includes('sos_incidents'), false);
+    // Current-system migrations may add later SOS runtime state, but the Sprint 15
+    // configuration foundation remains independently present.
+    assert.ok(tables.includes('sos_incidents'));
   });
 
-  it('uses privacy-safe defaults and never reports execution engines as active', () => {
+  it('preserves privacy-safe defaults while exposing the later SOS engine truthfully', () => {
     const circle = safetyService.getEmergencyCircle(owner);
 
     assert.equal(circle.preferences.allow_location_sharing, false);
     assert.equal(circle.preferences.emergency_circle_enabled, true);
     assert.equal(circle.readiness.state, 'INCOMPLETE');
-    assert.equal(circle.execution_capabilities.sos_activation, false);
-    assert.equal(circle.execution_capabilities.trusted_contact_notifications, false);
+    assert.equal(circle.execution_capabilities.sos_activation, true);
+    assert.equal(circle.execution_capabilities.trusted_contact_notification_orchestration, true);
+    assert.equal(circle.execution_capabilities.notification_delivery_provider_configured, false);
     assert.equal(circle.execution_capabilities.live_location_streaming, false);
-    assert.match(circle.readiness.notes.join(' '), /not active yet/i);
+    assert.match(circle.readiness.notes.join(' '), /delivery is only confirmed/i);
   });
 
   it('adds a prioritized contact with three explicit incident scopes and no location sharing by default', () => {
