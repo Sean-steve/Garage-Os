@@ -70,6 +70,21 @@ interface EmergencyCirclePayload {
   execution_capabilities: Record<string, boolean>;
 }
 
+interface TrustedAccessGrantSummary {
+  id: string;
+  contact_id: string;
+  contact_name: string;
+  status: 'ACTIVE' | 'REVOKED' | 'EXPIRED';
+  expires_at: string;
+  first_accessed_at?: string | null;
+  last_accessed_at?: string | null;
+  notification_status?: string | null;
+  latest_response?: {
+    response: 'ACKNOWLEDGED' | 'CONTACTING_USER' | 'CANNOT_ASSIST';
+    created_at: string;
+  } | null;
+}
+
 interface SosAggregate {
   incident: {
     id: string;
@@ -143,6 +158,7 @@ async function captureLocation(enabled: boolean) {
 export const BentoSafety: React.FC = () => {
   const [data, setData] = useState<EmergencyCirclePayload | null>(null);
   const [activeSos, setActiveSos] = useState<SosAggregate | null>(null);
+  const [trustedAccess, setTrustedAccess] = useState<TrustedAccessGrantSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -166,8 +182,18 @@ export const BentoSafety: React.FC = () => {
       const sosJson = await sosRes.json();
       if (!circleRes.ok) throw new Error(circleJson?.error?.message || circleJson?.message || 'Unable to load Safety Center');
       if (!sosRes.ok) throw new Error(sosJson?.error?.message || sosJson?.message || 'Unable to load SOS state');
+      const sosData = unwrap(sosJson) || null;
       setData(unwrap(circleJson));
-      setActiveSos(unwrap(sosJson) || null);
+      setActiveSos(sosData);
+      if (sosData?.incident?.id) {
+        const accessRes = await fetch(`/api/v1/safety/sos/incidents/${sosData.incident.id}/trusted-contact-access`);
+        if (accessRes.ok) {
+          const accessJson = await accessRes.json();
+          setTrustedAccess(unwrap(accessJson) || []);
+        }
+      } else {
+        setTrustedAccess([]);
+      }
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Unable to load Safety Center');
     } finally {
@@ -191,7 +217,15 @@ export const BentoSafety: React.FC = () => {
         const res = await fetch('/api/v1/safety/sos/active');
         if (!res.ok) return;
         const json = await res.json();
-        setActiveSos(unwrap(json) || null);
+        const sosData = unwrap(json) || null;
+        setActiveSos(sosData);
+        if (sosData?.incident?.id) {
+          const accessRes = await fetch(`/api/v1/safety/sos/incidents/${sosData.incident.id}/trusted-contact-access`);
+          if (accessRes.ok) {
+            const accessJson = await accessRes.json();
+            setTrustedAccess(unwrap(accessJson) || []);
+          }
+        }
       } catch {
         // Keep the last authoritative server state visible.
       }
@@ -296,6 +330,25 @@ export const BentoSafety: React.FC = () => {
       setMessage('SOS incident closed. Emergency-location access has been revoked.');
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Unable to close SOS');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const revokeTrustedAccess = async () => {
+    if (!activeSos) return;
+    setBusy(true);
+    try {
+      const res = await fetch(
+        `/api/v1/safety/sos/incidents/${activeSos.incident.id}/trusted-contact-access/revoke`,
+        { method: 'POST' }
+      );
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error?.message || json?.message || 'Unable to revoke trusted-contact access');
+      setMessage(`Revoked ${unwrap(json)?.revoked_grant_count || 0} active trusted-contact link(s).`);
+      await load();
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Unable to revoke trusted-contact access');
     } finally {
       setBusy(false);
     }
@@ -507,6 +560,42 @@ export const BentoSafety: React.FC = () => {
                   </div>
                 )}
 
+                {trustedAccess.length > 0 && (
+                  <div className="rounded-xl border border-slate-800 p-4">
+                    <div className="flex items-center justify-between gap-3 mb-3">
+                      <div>
+                        <p className="text-xs font-bold">Temporary trusted-contact access</p>
+                        <p className="text-[10px] text-slate-500 mt-1">Links are scoped, expiring and revocable. Raw tokens are never shown here.</p>
+                      </div>
+                      {trustedAccess.some((grant) => grant.status === 'ACTIVE') && (
+                        <button
+                          disabled={busy}
+                          onClick={revokeTrustedAccess}
+                          className="rounded-lg border border-red-900/60 px-3 py-1.5 text-[11px] font-semibold text-red-300 disabled:opacity-50"
+                        >
+                          Revoke active links
+                        </button>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      {trustedAccess.map((grant) => (
+                        <div key={grant.id} className="rounded-lg border border-slate-800 bg-slate-950/40 p-3 text-xs">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="font-semibold">{grant.contact_name}</span>
+                            <span className={grant.status === 'ACTIVE' ? 'text-emerald-300' : 'text-slate-500'}>{grant.status}</span>
+                          </div>
+                          <p className="mt-1 text-slate-500">
+                            Notification: {grant.notification_status || 'UNKNOWN'} • Portal viewed: {grant.first_accessed_at ? 'Yes' : 'No'}
+                          </p>
+                          {grant.latest_response && (
+                            <p className="mt-1 text-indigo-300">Response: {grant.latest_response.response.replaceAll('_', ' ')}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {activeSos.safety_check?.status === 'PENDING' && (
                   <div className="rounded-xl border border-indigo-800/60 bg-indigo-950/20 p-4">
                     <p className="font-semibold">Are you okay?</p>
@@ -544,7 +633,7 @@ export const BentoSafety: React.FC = () => {
         <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
           <p className="text-xs uppercase tracking-wider text-slate-500">Execution engines</p>
           <p className="text-lg font-bold mt-2">{data.readiness.sos_engine_active ? 'SOS engine active' : 'Unavailable'}</p>
-          <p className="text-xs text-slate-500 mt-2">Trusted-contact portal and automatic escalation remain later-sprint capabilities.</p>
+          <p className="text-xs text-slate-500 mt-2">Trusted-contact portal is active; automatic escalation remains a later-sprint capability.</p>
         </div>
       </div>
 
