@@ -22,7 +22,7 @@ export const Header: React.FC<HeaderProps> = ({
   showAdminTools = false,
   onLogout,
 }) => {
-  const navItems: Array<{ id: ActiveTab; label: string; icon: React.ComponentType<{ className?: string }>; admin?: boolean }> = [
+  const allNavItems: Array<{ id: ActiveTab; label: string; icon: React.ComponentType<{ className?: string }>; admin?: boolean }> = [
     { id: 'overview', label: 'Overview', icon: Layers },
     { id: 'fuel', label: 'Fuel & TCO', icon: Fuel },
     { id: 'maintenance', label: 'Maintenance', icon: Wrench },
@@ -35,7 +35,8 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'flags', label: 'Flags', icon: Sliders, admin: true },
     { id: 'audit', label: 'Audit', icon: ShieldCheck, admin: true },
     { id: 'traceability', label: 'Traceability', icon: ListTree, admin: true },
-  ].filter((item) => !item.admin || showAdminTools);
+  ];
+  const navItems = allNavItems.filter((item) => !item.admin || showAdminTools);
 
   return (
     <header className="flex justify-between items-center mb-8 flex-wrap gap-4">
