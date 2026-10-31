@@ -190,8 +190,8 @@ export class CarCareService {
         resource_id:saved.id,
         correlation_id:`care-profile:${saved.id}:v${saved.profile_version}`,
         source:'CAR_CARE_API',
-        before_state:existing||undefined,
-        after_state:saved,
+        before_state:existing?{...existing}:undefined,
+        after_state:{...saved},
         metadata:{vehicle_id:vehicleId,location_inference_used:false}
       },db);
       return saved;
