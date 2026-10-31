@@ -87,13 +87,13 @@ describe('Marketplace Foundation (GAR-021 / Sprint 22)',()=>{
     return listing;
   }
 
-  it('creates normalized marketplace schema and category taxonomy without premature order/payment tables',()=>{
+  it('preserves normalized marketplace foundation while later transaction tables exist and payment tables remain absent',()=>{
     const tables=db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map((r:any)=>r.name);
     for(const table of [
       'marketplace_stores','marketplace_categories','marketplace_products','marketplace_listings',
       'marketplace_listing_media','marketplace_listing_price_snapshots','marketplace_listing_search_projection'
     ]) assert.ok(tables.includes(table),table+' must exist');
-    assert.equal(tables.includes('marketplace_orders'),false);
+    assert.equal(tables.includes('marketplace_orders'),true);
     assert.equal(tables.includes('marketplace_payments'),false);
     const categories=marketplaceService.listCategories();
     assert.ok(categories.some((c:any)=>c.code==='PARTS'));
@@ -176,7 +176,7 @@ describe('Marketplace Foundation (GAR-021 / Sprint 22)',()=>{
     );
   });
 
-  it('publishes only through seller workflow and exposes explicit no-fitment/no-checkout truth',()=>{
+  it('publishes only through seller workflow and exposes current fitment/checkout/payment truth',()=>{
     createProduct();const listing=createListing();
     marketplaceService.updateStore(owner,storeId,{status:'ACTIVE'});
     const published=marketplaceService.publishListing(owner,storeId,listing.id);
@@ -187,16 +187,16 @@ describe('Marketplace Foundation (GAR-021 / Sprint 22)',()=>{
     assert.equal(search.items[0].fitment_status,'UNKNOWN');
     assert.equal(search.items[0].authenticity_verification_status,'NOT_VERIFIED');
     assert.equal(search.truth.fitment_confirmed,false);
-    assert.equal(search.truth.checkout_available,false);
-    assert.equal(search.truth.order_creation_available,false);
+    assert.equal(search.truth.checkout_available,true);
+    assert.equal(search.truth.order_creation_available,true);
     assert.equal(search.truth.payment_available,false);
 
     const detail=marketplaceService.getListingDetail(listing.id);
     assert.equal(detail.truth.compatibility_status,'UNKNOWN');
     assert.equal(detail.truth.fitment_confirmed,false);
     assert.equal(detail.truth.authenticity_verified,false);
-    assert.equal(detail.truth.checkout_available,false);
-    assert.equal(detail.truth.order_creation_available,false);
+    assert.equal(detail.truth.checkout_available,true);
+    assert.equal(detail.truth.order_creation_available,true);
     assert.equal(detail.truth.payment_available,false);
   });
 
@@ -281,7 +281,7 @@ describe('Marketplace Foundation (GAR-021 / Sprint 22)',()=>{
     );
   });
 
-  it('publishing event truth never claims fitment, authenticity, order or payment capability',()=>{
+  it('publishing event truth reflects later checkout/order capability while never claiming payment capture',()=>{
     createProduct();const listing=createListing();
     marketplaceService.updateStore(owner,storeId,{status:'ACTIVE'});
     marketplaceService.publishListing(owner,storeId,listing.id);
@@ -292,8 +292,8 @@ describe('Marketplace Foundation (GAR-021 / Sprint 22)',()=>{
     const payload=JSON.parse(row.payload);
     assert.equal(payload.fitment_status,'UNKNOWN');
     assert.equal(payload.authenticity_verification_status,'NOT_VERIFIED');
-    assert.equal(payload.checkout_available,false);
-    assert.equal(payload.order_creation_available,false);
+    assert.equal(payload.checkout_available,true);
+    assert.equal(payload.order_creation_available,true);
     assert.equal(payload.payment_available,false);
   });
 });

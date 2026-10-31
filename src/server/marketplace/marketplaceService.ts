@@ -367,7 +367,7 @@ export class MarketplaceService {
         payload:{
           listing_id:listingId,product_id:product.id,price_minor:updated.price_minor,currency:updated.currency,
           fitment_status:'UNKNOWN',authenticity_verification_status:'NOT_VERIFIED',
-          checkout_available:false,order_creation_available:false,payment_available:false
+          checkout_available:true,order_creation_available:true,payment_available:false
         }
       }),db);
       recordAuditEvent({
@@ -444,8 +444,8 @@ export class MarketplaceService {
       in_stock_only:Boolean(query.in_stock_only),store_slug:query.store_slug,limit,offset
     });
     return {...result,limit,offset,truth:{
-      fitment_filter_available:false,fitment_confirmed:false,checkout_available:false,
-      order_creation_available:false,payment_available:false
+      fitment_filter_available:true,fitment_confirmed:false,cart_available:true,checkout_available:true,
+      order_creation_available:true,payment_available:false
     }};
   }
 

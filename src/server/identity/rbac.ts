@@ -140,6 +140,8 @@ export enum CanonicalPermission {
   // Marketplace
   MARKETPLACE_PRODUCTS_READ = 'marketplace.products.read',
   MARKETPLACE_PRODUCTS_MANAGE = 'marketplace.products.manage',
+  MARKETPLACE_ORDERS_READ = 'marketplace.orders.read',
+  MARKETPLACE_ORDERS_MANAGE = 'marketplace.orders.manage',
 
   // Fleet
   FLEET_VEHICLES_READ = 'fleet.vehicles.read',
@@ -185,6 +187,8 @@ export const ROLE_PERMISSIONS: Record<MembershipRole, readonly CanonicalPermissi
     CanonicalPermission.ROADSIDE_DISPATCH_MANAGE,
     CanonicalPermission.MARKETPLACE_PRODUCTS_READ,
     CanonicalPermission.MARKETPLACE_PRODUCTS_MANAGE,
+    CanonicalPermission.MARKETPLACE_ORDERS_READ,
+    CanonicalPermission.MARKETPLACE_ORDERS_MANAGE,
     CanonicalPermission.FLEET_VEHICLES_READ,
     CanonicalPermission.FLEET_VEHICLES_MANAGE,
     CanonicalPermission.VEHICLE_TIMELINE_READ,
@@ -600,6 +604,8 @@ export const ROLE_PERMISSIONS: Record<MembershipRole, readonly CanonicalPermissi
     CanonicalPermission.ORG_READ,
     CanonicalPermission.MARKETPLACE_PRODUCTS_READ,
     CanonicalPermission.MARKETPLACE_PRODUCTS_MANAGE,
+    CanonicalPermission.MARKETPLACE_ORDERS_READ,
+    CanonicalPermission.MARKETPLACE_ORDERS_MANAGE,
     CanonicalPermission.VEHICLE_PASSPORT_READ,
   ],
   [MembershipRole.FLEET_ADMIN]: [
