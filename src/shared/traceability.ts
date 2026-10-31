@@ -468,3 +468,48 @@ export const R1_SPRINT_1_TO_14_TRACEABILITY_MATRIX: TraceabilityItem[] = [
     notes: 'R1 adds authenticated per-topic realtime authorization.',
   },
 ];
+
+
+/**
+ * Sprint 15 — Emergency Circle & Human Safety Foundation (GAR-017).
+ * Configuration foundation only: SOS activation/notification delivery are not implemented here.
+ */
+export const SPRINT_15_TRACEABILITY_MATRIX: TraceabilityItem[] = [
+  {
+    requirement_id: 'GAR-DEV-S15',
+    source: 'GAR-017/GAR-032/GAR-039/GAR-040/GAR-049',
+    title: 'Emergency Circle & Human Safety Foundation',
+    criticality: 'LAUNCH_CRITICAL',
+    status: 'IMPLEMENTED',
+    implementation_refs: [
+      'src/server/safety/types.ts',
+      'src/server/safety/safetyRepository.ts',
+      'src/server/safety/safetyService.ts',
+      'src/server/api/safetyRouter.ts',
+    ],
+    schema_refs: [
+      'emergency_contacts',
+      'emergency_contact_scopes',
+      'human_safety_preferences',
+      'safety_configuration_history',
+    ],
+    api_event_refs: [
+      'GET /api/v1/safety/emergency-circle',
+      'POST /api/v1/safety/emergency-circle/contacts',
+      'PATCH /api/v1/safety/emergency-circle/contacts/:id',
+      'DELETE /api/v1/safety/emergency-circle/contacts/:id',
+      'PUT /api/v1/safety/emergency-circle/contacts/:id/scopes/:level',
+      'GET/PUT /api/v1/safety/preferences',
+      'GET /api/v1/safety/readiness',
+      'safety.emergency_contact.added',
+      'safety.emergency_contact.updated',
+      'safety.emergency_contact.revoked',
+      'safety.emergency_contact.scope_updated',
+      'safety.preferences.updated',
+    ],
+    ui_refs: ['src/client/components/BentoSafety.tsx'],
+    test_refs: ['tests/integration/emergencyCircleArchitecture.test.ts'],
+    ops_refs: ['audit_events', 'outbox_events'],
+    notes: 'Sprint 15 configures trusted contacts and safety policy. SOS activation, notification delivery, temporary trusted-contact access, and automatic escalation remain intentionally unavailable until Sprint 16/17.',
+  },
+];
