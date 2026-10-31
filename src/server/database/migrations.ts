@@ -4661,9 +4661,9 @@ export const MIGRATIONS: Migration[] = [
           ON trip_guardian_journeys(user_id, status, created_at DESC);
         CREATE INDEX IF NOT EXISTS idx_trip_guardian_journeys_vehicle
           ON trip_guardian_journeys(vehicle_id, status, created_at DESC);
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_trip_guardian_one_active_vehicle
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_trip_guardian_one_open_vehicle
           ON trip_guardian_journeys(user_id, vehicle_id)
-          WHERE status = 'IN_PROGRESS';
+          WHERE status IN ('PREPARED','IN_PROGRESS');
 
         CREATE TABLE IF NOT EXISTS trip_guardian_contact_shares (
           id TEXT PRIMARY KEY,
