@@ -94,6 +94,13 @@ export class TimelineRepository {
     return true;
   }
 
+  getTimelineEntryBySourceEventId(sourceEventId: string): VehicleTimelineEntryEntity | null {
+    const row = getDatabase()
+      .prepare('SELECT * FROM vehicle_timeline_entries WHERE source_event_id = ? LIMIT 1;')
+      .get(sourceEventId) as Record<string, unknown> | undefined;
+    return row ? this.mapTimelineRowToEntity(row) : null;
+  }
+
   /**
    * Retrieves a single timeline entry by ID.
    */
