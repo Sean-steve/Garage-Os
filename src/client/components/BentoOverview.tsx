@@ -25,6 +25,7 @@ interface BentoOverviewProps {
   onEnqueueJob: () => Promise<void>;
   onTestIdempotency: () => Promise<void>;
   actionStatus: string | null;
+  showAdminControls?: boolean;
 }
 
 export const BentoOverview: React.FC<BentoOverviewProps> = ({
@@ -35,6 +36,7 @@ export const BentoOverview: React.FC<BentoOverviewProps> = ({
   onEnqueueJob,
   onTestIdempotency,
   actionStatus,
+  showAdminControls = false,
 }) => {
   const [optimizationMode, setOptimizationMode] = useState(true);
   const [isActing, setIsActing] = useState(false);
@@ -307,35 +309,42 @@ export const BentoOverview: React.FC<BentoOverviewProps> = ({
               Dispatches at-least-once domain envelopes atomically with SQLite transactions (GAR-035).
             </p>
 
-            {/* Quick Action Buttons */}
-            <div className="flex flex-wrap gap-2.5">
-              <button
-                disabled={isActing}
-                onClick={() => handleAction(onEmitTestEvent)}
-                className="px-4 py-2 bg-white text-slate-950 text-xs font-bold rounded-xl uppercase tracking-wider hover:bg-indigo-400 hover:text-white transition-all cursor-pointer shadow-md disabled:opacity-50 flex items-center gap-1.5"
-              >
-                <Play className="w-3.5 h-3.5" />
-                Emit Outbox Event
-              </button>
+            {/* Administrative verification actions are never shown to ordinary owners/providers. */}
+            {showAdminControls ? (
+              <div className="flex flex-wrap gap-2.5">
+                <button
+                  disabled={isActing}
+                  onClick={() => handleAction(onEmitTestEvent)}
+                  className="px-4 py-2 bg-white text-slate-950 text-xs font-bold rounded-xl uppercase tracking-wider hover:bg-indigo-400 hover:text-white transition-all cursor-pointer shadow-md disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  <Play className="w-3.5 h-3.5" />
+                  Emit Outbox Event
+                </button>
 
-              <button
-                disabled={isActing}
-                onClick={() => handleAction(onEnqueueJob)}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl uppercase tracking-wider border border-slate-700 hover:border-indigo-500/50 transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
-              >
-                <Cpu className="w-3.5 h-3.5 text-indigo-400" />
-                Queue Job
-              </button>
+                <button
+                  disabled={isActing}
+                  onClick={() => handleAction(onEnqueueJob)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl uppercase tracking-wider border border-slate-700 hover:border-indigo-500/50 transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  <Cpu className="w-3.5 h-3.5 text-indigo-400" />
+                  Queue Job
+                </button>
 
-              <button
-                disabled={isActing}
-                onClick={() => handleAction(onTestIdempotency)}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl uppercase tracking-wider border border-slate-700 hover:border-indigo-500/50 transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
-              >
-                <RotateCw className="w-3.5 h-3.5 text-emerald-400" />
-                Test Idempotency
-              </button>
-            </div>
+                <button
+                  disabled={isActing}
+                  onClick={() => handleAction(onTestIdempotency)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl uppercase tracking-wider border border-slate-700 hover:border-indigo-500/50 transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  <RotateCw className="w-3.5 h-3.5 text-emerald-400" />
+                  Test Idempotency
+                </button>
+              </div>
+            ) : (
+              <div className="inline-flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+                Platform controls restricted to administrators
+              </div>
+            )}
           </div>
 
           {/* Graphical mesh equalizer bars matching design HTML */}
