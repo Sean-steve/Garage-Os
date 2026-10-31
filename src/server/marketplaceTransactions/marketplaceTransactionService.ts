@@ -271,7 +271,11 @@ export class MarketplaceTransactionService{
   cancelMyOrder(actor:AuthenticatedActorContext,orderId:string,reasonInput:unknown):MarketplaceOrderDetail{
     const order=repo.getOrder(orderId);
     if(!order||order.buyer_user_id!==actor.user_id)throw new CanonicalAppError(ErrorCode.NOT_FOUND_OR_NOT_ACCESSIBLE,'Order not found',404);
-    if(order.status!=='AWAITING_PAYMENT')throw new CanonicalAppError(ErrorCode.INVALID_STATE_TRANSITION,'Only awaiting-payment orders can be cancelled in Sprint 24',409);
+    if(order.status!=='AWAITING_PAYMENT')throw new CanonicalAppError(ErrorCode.INVALID_STATE_TRANSITION,'Only unpaid awaiting-payment orders can be cancelled',409);
+    const captured=Number((getDatabase().prepare(
+      "SELECT COALESCE(SUM(amount_minor),0) total FROM marketplace_settlement_ledger_entries WHERE order_id=? AND entry_type='PAYMENT_CAPTURE'"
+    ).get(order.id) as any)?.total||0);
+    if(captured>0)throw new CanonicalAppError(ErrorCode.INVALID_STATE_TRANSITION,'Captured orders cannot use pre-payment cancellation; use the refund workflow',409);
     const reason=requiredText(reasonInput,'reason',500);
     const now=getCurrentUtcIsoString();
     withTransaction(({db})=>{

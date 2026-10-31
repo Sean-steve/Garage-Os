@@ -135,7 +135,32 @@ export class MarketplaceTransactionRepository{
     const reservations=(getDatabase().prepare('SELECT id,listing_id,quantity,status,held_at,released_at FROM marketplace_inventory_reservations WHERE order_id=? ORDER BY id').all(value.id) as any[])
       .map(r=>({id:String(r.id),listing_id:String(r.listing_id),quantity:Number(r.quantity),status:r.status,
         held_at:String(r.held_at),released_at:r.released_at?String(r.released_at):null}));
-    return {order:value,items,reservations,truth:{payment_captured:false,payment_available:false,seller_fulfillment_available:false}};
+    const captured=Number((getDatabase().prepare(
+      "SELECT COALESCE(SUM(amount_minor),0) total FROM marketplace_settlement_ledger_entries WHERE order_id=? AND entry_type='PAYMENT_CAPTURE'"
+    ).get(value.id) as any)?.total||0);
+    const refunded=Number((getDatabase().prepare(
+      "SELECT COALESCE(SUM(-amount_minor),0) total FROM marketplace_settlement_ledger_entries WHERE order_id=? AND entry_type='REFUND_ADJUSTMENT'"
+    ).get(value.id) as any)?.total||0);
+    const latest=getDatabase().prepare(
+      'SELECT id,status FROM marketplace_payment_intents WHERE order_id=? ORDER BY created_at DESC LIMIT 1'
+    ).get(value.id) as any;
+    const activeProviders=Number((getDatabase().prepare(
+      "SELECT COUNT(*) count FROM marketplace_payment_providers WHERE status='ACTIVE'"
+    ).get() as any)?.count||0);
+    let commercial:any='AWAITING_PAYMENT';
+    if(value.status==='CANCELLED')commercial='CANCELLED';
+    else if(captured>=value.total_minor&&refunded===0)commercial='PAID';
+    else if(captured>0&&refunded>=captured)commercial='REFUNDED';
+    else if(captured>0&&refunded>0)commercial='PARTIALLY_REFUNDED';
+    else if(latest?.status==='FAILED')commercial='PAYMENT_FAILED';
+    else if(latest?.status==='PENDING')commercial='PAYMENT_PENDING';
+    const paymentAvailable=activeProviders>0&&value.status!=='CANCELLED'&&captured<value.total_minor;
+    const fulfillmentAuthorized=commercial==='PAID'||commercial==='PARTIALLY_REFUNDED';
+    return {order:value,items,reservations,
+      truth:{payment_captured:captured>0,payment_available:paymentAvailable,seller_fulfillment_available:fulfillmentAuthorized},
+      financial:{commercial_status:commercial,captured_minor:captured,refunded_minor:refunded,net_paid_minor:captured-refunded,
+        latest_payment_intent_id:latest?.id?String(latest.id):null}};
+
   }
   cancelOrder(orderId:string,reason:string,now:string){
     getDatabase().prepare(
