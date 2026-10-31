@@ -273,8 +273,10 @@ export function evaluatePersonalizedCare(input:PersonalizationEngineInput):Perso
       rule_id:'RECORDED_FUEL_EFFICIENCY_ANOMALY',
       priority:'MEDIUM',
       title:'Fuel-efficiency change has been observed',
-      explanation:input.fuel.observation_text ||
-        'The fuel domain recorded an efficiency anomaly. This is an observation, not a diagnosis of any engine, tyre or fuel-system fault.',
+      explanation:(input.fuel.observation_text
+        ? input.fuel.observation_text+' '
+        : 'The fuel domain recorded an efficiency anomaly. ')+
+        'This is an observation, not a diagnosis of any engine, tyre or fuel-system fault.',
       evidence:[{
         source_type:'FUEL_EFFICIENCY',label:'Fuel anomaly recorded',value:true,
         source_reference_id:input.fuel.snapshot_id||undefined
