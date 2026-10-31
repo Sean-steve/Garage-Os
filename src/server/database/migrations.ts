@@ -5383,7 +5383,10 @@ export const MIGRATIONS: Migration[] = [
       `);
     },
   }
-];\n\n/**\n * Ensures the migration tracking table exists
+];
+
+/**
+ * Ensures the migration tracking table exists
  */
 function ensureMigrationTable(db: DatabaseSync): void {
   db.exec(`
