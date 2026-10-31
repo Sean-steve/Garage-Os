@@ -72,18 +72,35 @@ export class TowingDispatchAdapter implements DispatchDomainAdapter {
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
     const offerId = generateCanonicalId('tpo');
 
+    if (params.candidate.responder_type !== 'RECOVERY_UNIT') {
+      throw new Error(
+        `Towing dispatch candidate ${params.candidate.id} is not a recovery unit`
+      );
+    }
+
+    const db = getDatabase();
+    const provider = db
+      .prepare('SELECT currency FROM service_providers WHERE id = ? LIMIT 1')
+      .get(params.candidate.provider_id) as { currency?: string | null } | undefined;
+
     const offer: TowProviderOfferEntity = {
       id: offerId,
       tow_request_id: params.sourceRequestId,
       provider_id: params.candidate.provider_id,
-      recovery_unit_id: params.candidate.responder_type === 'RECOVERY_UNIT' ? params.candidate.responder_reference_id : null,
+      recovery_unit_id: params.candidate.responder_reference_id,
       status: TowOfferStatus.OFFERED,
       offered_at: now,
       expires_at: expiresAt,
-      distance_km: params.distanceKm || (params.candidate.distance_meters ? Math.round((params.candidate.distance_meters / 1000) * 10) / 10 : 5.0),
+      distance_km:
+        params.distanceKm ??
+        (params.candidate.distance_meters != null
+          ? Math.round((params.candidate.distance_meters / 1000) * 10) / 10
+          : null),
       compatibility_status: TowCompatibilityStatus.CONFIRMED,
-      estimated_price_minor: 650000, // 6500 KES standard recovery
-      currency: 'KES',
+      // Sprint 14 dispatch/routing never manufactures a tow price. A quote/rate policy
+      // must provide an authoritative estimate before a monetary value is exposed.
+      estimated_price_minor: null,
+      currency: provider?.currency || 'KES',
       created_at: now,
     };
 
@@ -101,11 +118,17 @@ export class TowingDispatchAdapter implements DispatchDomainAdapter {
     const now = getCurrentUtcIsoString();
     const assignmentId = generateCanonicalId('ta');
 
+    if (params.candidate.responder_type !== 'RECOVERY_UNIT') {
+      throw new Error(
+        `Cannot commit towing assignment for non-recovery responder ${params.candidate.responder_reference_id}`
+      );
+    }
+
     const assignment: TowAssignmentEntity = {
       id: assignmentId,
       tow_request_id: params.sourceRequestId,
       provider_id: params.candidate.provider_id,
-      recovery_unit_id: params.candidate.responder_type === 'RECOVERY_UNIT' ? params.candidate.responder_reference_id : 'unit_default',
+      recovery_unit_id: params.candidate.responder_reference_id,
       operator_staff_id: params.actor.id,
       operator_name: params.actor.name || 'Tow Operator',
       status: TowAssignmentStatus.ASSIGNED,
