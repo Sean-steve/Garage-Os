@@ -43,6 +43,7 @@ const EnvSchema = z.object({
 
   // Auth placeholders (GAR-003)
   JWT_SECRET: z.string().default('dev-insecure-secret-replace-in-production'),
+  FILE_SIGNING_SECRET: z.string().optional(),
   SESSION_TTL_SECONDS: z.coerce.number().default(86400),
 
   // Outbox & Jobs (GAR-035, GAR-036)
@@ -79,6 +80,13 @@ export function loadAndValidateConfig(): AppConfig {
   if (result.data.APP_ENV === 'production') {
     if (result.data.JWT_SECRET.includes('insecure') || result.data.JWT_SECRET.length < 32) {
       throw new Error('FATAL: Production mode requires a secure JWT_SECRET of at least 32 characters.');
+    }
+    const fileSigningSecret = result.data.FILE_SIGNING_SECRET || result.data.JWT_SECRET;
+    if (fileSigningSecret.length < 32) {
+      throw new Error('FATAL: Production mode requires FILE_SIGNING_SECRET/JWT_SECRET of at least 32 characters.');
+    }
+    if (result.data.CORS_ALLOWED_ORIGINS.trim() === '*') {
+      throw new Error('FATAL: Production mode requires explicit CORS_ALLOWED_ORIGINS.');
     }
   }
 
