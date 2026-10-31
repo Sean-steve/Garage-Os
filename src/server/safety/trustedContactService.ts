@@ -481,6 +481,50 @@ export class TrustedContactService {
     return rows.length;
   }
 
+  expireGrantIfDue(grantId: string, now = getCurrentUtcIsoString()): boolean {
+    const grant = trustedContactRepository.getGrantById(grantId);
+    if (
+      !grant ||
+      grant.status !== TrustedContactGrantStatus.ACTIVE ||
+      grant.expires_at > now
+    ) {
+      return false;
+    }
+
+    withTransaction(({ db }) => {
+      trustedContactRepository.expireGrant(grant.id, now);
+      trustedContactRepository.recordAccessAudit({
+        id: generateCanonicalId('tca'),
+        grant_id: grant.id,
+        incident_id: grant.incident_id,
+        contact_id: grant.contact_id,
+        action: 'ACCESS_GRANT_EXPIRED',
+        occurred_at: now,
+      });
+      enqueueOutboxEvent(
+        createCanonicalEventEnvelope({
+          type: 'safety.trusted_contact.access_grant.expired',
+          producer: 'garage-os-safety',
+          correlation_id: grant.incident_id,
+          subject_ids: {
+            sos_incident: grant.incident_id,
+            emergency_contact: grant.contact_id,
+            trusted_contact_grant: grant.id,
+          },
+          actor_type: CanonicalActorType.SYSTEM_WORKER,
+          provenance_class: DataProvenanceClass.DERIVED_DETERMINISTIC,
+          payload: {
+            grant_id: grant.id,
+            incident_id: grant.incident_id,
+            expired_at: now,
+          },
+        }),
+        db
+      );
+    });
+    return true;
+  }
+
   expireDueGrants(now = getCurrentUtcIsoString()): number {
     return trustedContactRepository.expireDueGrants(now);
   }
@@ -502,15 +546,7 @@ export class TrustedContactService {
 
     const now = getCurrentUtcIsoString();
     if (grant.status === TrustedContactGrantStatus.ACTIVE && grant.expires_at <= now) {
-      trustedContactRepository.expireGrant(grant.id, now);
-      trustedContactRepository.recordAccessAudit({
-        id: generateCanonicalId('tca'),
-        grant_id: grant.id,
-        incident_id: grant.incident_id,
-        contact_id: grant.contact_id,
-        action: 'ACCESS_GRANT_EXPIRED',
-        occurred_at: now,
-      });
+      this.expireGrantIfDue(grant.id, now);
       throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Trusted-contact link has expired', 401);
     }
 
