@@ -16,6 +16,9 @@ import { BentoQueues } from './client/components/BentoQueues';
 import { BentoFlags } from './client/components/BentoFlags';
 import { BentoAudit } from './client/components/BentoAudit';
 import { BentoTraceability } from './client/components/BentoTraceability';
+import { BentoBookings } from './client/components/BentoBookings';
+import { BentoDomainConsole } from './client/components/BentoDomainConsole';
+import { LoginGate } from './client/components/LoginGate';
 import {
   ActiveTab,
   PlatformCapabilities,
@@ -28,6 +31,8 @@ import {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('overview');
+  const [sessionToken, setSessionToken] = useState<string | null>(() => sessionStorage.getItem('garage_os_session_token'));
+  const [actor, setActor] = useState<any>(null);
   const [capabilities, setCapabilities] = useState<PlatformCapabilities | null>(null);
   const [queueStatus, setQueueStatus] = useState<QueueStatus | null>(null);
   const [flags, setFlags] = useState<FeatureFlag[]>([]);
@@ -38,6 +43,20 @@ export default function App() {
   const [loading, setLoading] = useState<boolean>(true);
   const [vehicles, setVehicles] = useState<VehicleSummary[]>([]);
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>('veh_seed_car_01');
+
+  const fetchMe = useCallback(async () => {
+    const res = await fetch('/api/v1/me');
+    if (!res.ok) {
+      sessionStorage.removeItem('garage_os_session_token');
+      setSessionToken(null);
+      setActor(null);
+      return null;
+    }
+    const json = await res.json();
+    const me = json.data || json;
+    setActor(me);
+    return me;
+  }, []);
 
   // Load vehicles list
   const fetchVehicles = useCallback(async () => {
@@ -130,28 +149,35 @@ export default function App() {
     }
   }, []);
 
-  // Initial load
+  // Initial authenticated load
   useEffect(() => {
+    if (!sessionToken) {
+      setLoading(false);
+      return;
+    }
+
+    let interval: ReturnType<typeof setInterval> | undefined;
     async function init() {
       setLoading(true);
-      await Promise.all([
-        fetchCapabilities(),
-        fetchVehicles(),
-        fetchQueues(),
-        fetchFlags(),
-        fetchAudit(),
-        fetchTraceability(),
-      ]);
+      const me = await fetchMe();
+      if (!me) {
+        setLoading(false);
+        return;
+      }
+
+      await Promise.all([fetchCapabilities(), fetchVehicles()]);
+      const isAdmin = Array.isArray(me.platform_roles) && me.platform_roles.includes('PLATFORM_ADMIN');
+      if (isAdmin) {
+        await Promise.all([fetchQueues(), fetchFlags(), fetchAudit(), fetchTraceability()]);
+        interval = setInterval(fetchQueues, 10000);
+      }
       setLoading(false);
     }
     init();
-
-    // Auto-refresh queues every 10s
-    const interval = setInterval(() => {
-      fetchQueues();
-    }, 10000);
-    return () => clearInterval(interval);
-  }, [fetchCapabilities, fetchVehicles, fetchQueues, fetchFlags, fetchAudit, fetchTraceability]);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [sessionToken, fetchMe, fetchCapabilities, fetchVehicles, fetchQueues, fetchFlags, fetchAudit, fetchTraceability]);
 
   // Actions
   const handleEmitTestEvent = async () => {
@@ -246,6 +272,22 @@ export default function App() {
   };
 
   const systemHealth = capabilities?.lifecycle_state || 'UP';
+  const isPlatformAdmin = Boolean(actor?.platform_roles?.includes('PLATFORM_ADMIN'));
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/v1/auth/logout', { method: 'POST' });
+    } catch {
+      // Session is cleared locally even if the server is unreachable.
+    }
+    sessionStorage.removeItem('garage_os_session_token');
+    setSessionToken(null);
+    setActor(null);
+  };
+
+  if (!sessionToken) {
+    return <LoginGate onAuthenticated={setSessionToken} />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-6 md:p-10 font-sans max-w-7xl mx-auto flex flex-col justify-between">
@@ -254,6 +296,9 @@ export default function App() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         systemHealth={systemHealth}
+        displayName={actor?.profile?.display_name || actor?.email || 'Garage OS User'}
+        isPlatformAdmin={isPlatformAdmin}
+        onLogout={handleLogout}
       />
 
       {/* Main Tab View */}
@@ -329,6 +374,24 @@ export default function App() {
             }}
           />
         )}
+
+        {activeTab === 'bookings' && (
+          <BentoBookings
+            vehicles={vehicles}
+            selectedVehicleId={selectedVehicleId}
+            onSelectVehicle={setSelectedVehicleId}
+            onNotify={(msg) => {
+              setActionStatus(msg);
+              setTimeout(() => setActionStatus(null), 4000);
+            }}
+          />
+        )}
+
+        {activeTab === 'providers' && <BentoDomainConsole mode="providers" />}
+        {activeTab === 'workshop' && <BentoDomainConsole mode="workshop" />}
+        {activeTab === 'roadside' && <BentoDomainConsole mode="roadside" />}
+        {activeTab === 'towing' && <BentoDomainConsole mode="towing" />}
+        {activeTab === 'dispatch' && <BentoDomainConsole mode="dispatch" />}
 
         {activeTab === 'queues' && (
           <BentoQueues
