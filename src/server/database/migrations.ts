@@ -4341,6 +4341,236 @@ export const MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    id: '020_car_care_center',
+    name: 'Car Care Center, Education & Owner Guidance (GAR-020)',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS car_care_articles (
+          id TEXT PRIMARY KEY,
+          slug TEXT UNIQUE NOT NULL,
+          content_kind TEXT NOT NULL,
+          category TEXT NOT NULL,
+          title TEXT NOT NULL,
+          summary TEXT NOT NULL,
+          explanation TEXT NOT NULL,
+          owner_actions_json TEXT NOT NULL DEFAULT '[]',
+          seek_help_when_json TEXT NOT NULL DEFAULT '[]',
+          risk_level TEXT NOT NULL DEFAULT 'INFO',
+          professional_inspection_required INTEGER NOT NULL DEFAULT 0,
+          roadside_recommended INTEGER NOT NULL DEFAULT 0,
+          booking_recommended INTEGER NOT NULL DEFAULT 0,
+          source_label TEXT NOT NULL,
+          content_version INTEGER NOT NULL DEFAULT 1,
+          status TEXT NOT NULL DEFAULT 'PUBLISHED',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          CHECK (content_kind IN ('WARNING_LIGHT', 'SYMPTOM', 'CARE_GUIDE', 'LONG_TRIP', 'SAFETY')),
+          CHECK (risk_level IN ('INFO', 'CAUTION', 'URGENT')),
+          CHECK (status IN ('DRAFT', 'PUBLISHED', 'RETIRED'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_car_care_articles_kind
+          ON car_care_articles(content_kind, category, status);
+
+        CREATE TABLE IF NOT EXISTS car_care_mission_templates (
+          id TEXT PRIMARY KEY,
+          code TEXT UNIQUE NOT NULL,
+          mission_type TEXT NOT NULL,
+          title TEXT NOT NULL,
+          description TEXT NOT NULL,
+          disclaimer TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'ACTIVE',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          CHECK (mission_type IN ('WEEKLY_CHECK', 'PRE_TRIP', 'LONG_TRIP', 'SEASONAL')),
+          CHECK (status IN ('ACTIVE', 'RETIRED'))
+        );
+
+        CREATE TABLE IF NOT EXISTS car_care_mission_items (
+          id TEXT PRIMARY KEY,
+          template_id TEXT NOT NULL REFERENCES car_care_mission_templates(id) ON DELETE CASCADE,
+          display_order INTEGER NOT NULL,
+          title TEXT NOT NULL,
+          instructions TEXT NOT NULL,
+          check_level TEXT NOT NULL,
+          safety_level TEXT NOT NULL DEFAULT 'NORMAL',
+          concern_action TEXT NOT NULL DEFAULT 'OPEN_ISSUE',
+          article_slug TEXT,
+          created_at TEXT NOT NULL,
+          UNIQUE(template_id, display_order),
+          CHECK (check_level IN ('OWNER_SAFE_CHECK', 'PROFESSIONAL_INSPECTION_ONLY')),
+          CHECK (safety_level IN ('NORMAL', 'CAUTION', 'SAFETY_CRITICAL')),
+          CHECK (concern_action IN ('OPEN_ISSUE', 'OPEN_MAINTENANCE', 'OPEN_ROADSIDE', 'OPEN_BOOKINGS', 'OPEN_PROVIDERS', 'NONE'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_car_care_mission_items_template
+          ON car_care_mission_items(template_id, display_order);
+
+        CREATE TABLE IF NOT EXISTS vehicle_care_missions (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          vehicle_id TEXT NOT NULL REFERENCES vehicles(id) ON DELETE CASCADE,
+          template_id TEXT NOT NULL REFERENCES car_care_mission_templates(id) ON DELETE RESTRICT,
+          status TEXT NOT NULL DEFAULT 'ACTIVE',
+          started_at TEXT NOT NULL,
+          completed_at TEXT,
+          cancelled_at TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          CHECK (status IN ('ACTIVE', 'COMPLETED', 'CANCELLED'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_vehicle_care_missions_user_vehicle
+          ON vehicle_care_missions(user_id, vehicle_id, status, started_at DESC);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_vehicle_care_one_active_template
+          ON vehicle_care_missions(user_id, vehicle_id, template_id)
+          WHERE status = 'ACTIVE';
+
+        CREATE TABLE IF NOT EXISTS vehicle_care_mission_item_progress (
+          id TEXT PRIMARY KEY,
+          mission_id TEXT NOT NULL REFERENCES vehicle_care_missions(id) ON DELETE CASCADE,
+          item_id TEXT NOT NULL REFERENCES car_care_mission_items(id) ON DELETE RESTRICT,
+          status TEXT NOT NULL DEFAULT 'PENDING',
+          note TEXT,
+          updated_by TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          completed_at TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          UNIQUE(mission_id, item_id),
+          CHECK (status IN ('PENDING', 'COMPLETED', 'CONCERN_REPORTED', 'SKIPPED', 'PROFESSIONAL_HELP_REQUIRED'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_vehicle_care_progress_mission
+          ON vehicle_care_mission_item_progress(mission_id, status);
+
+        INSERT OR IGNORE INTO car_care_articles (
+          id, slug, content_kind, category, title, summary, explanation,
+          owner_actions_json, seek_help_when_json, risk_level,
+          professional_inspection_required, roadside_recommended, booking_recommended,
+          source_label, content_version, status, created_at, updated_at
+        ) VALUES
+        (
+          'cca_check_engine', 'check-engine-light', 'WARNING_LIGHT', 'ENGINE',
+          'Check engine light', 'The engine-management system has detected a condition that needs attention.',
+          'A check-engine light is a signal, not a diagnosis. Many different systems can trigger it, so Garage OS must not guess the failed component without diagnostic evidence.',
+          '["Note whether the light is steady or flashing.","Notice any loss of power, unusual vibration, smoke or smell.","Record the issue in Garage OS and arrange diagnostic inspection."]',
+          '["If the light is flashing.","If the engine runs very roughly or loses substantial power.","If there is smoke, a strong fuel smell or another serious symptom."]',
+          'CAUTION', 1, 0, 1, 'Garage OS curated owner guidance', 1, 'PUBLISHED',
+          '2026-10-31T00:00:00.000Z', '2026-10-31T00:00:00.000Z'
+        ),
+        (
+          'cca_oil_pressure', 'oil-pressure-warning', 'WARNING_LIGHT', 'ENGINE',
+          'Oil pressure warning', 'Low oil pressure can rapidly damage an engine.',
+          'This warning concerns oil pressure, not simply oil level. Do not assume topping up oil resolves the cause.',
+          '["Stop driving as soon as it is safe to do so.","Switch off the engine.","Only check oil level if you can do so safely and according to the vehicle manual."]',
+          '["If the warning remains on after restart.","If there is knocking, smoke or visible oil loss.","If you are not sure the engine can be operated safely."]',
+          'URGENT', 1, 1, 1, 'Garage OS curated owner guidance', 1, 'PUBLISHED',
+          '2026-10-31T00:00:00.000Z', '2026-10-31T00:00:00.000Z'
+        ),
+        (
+          'cca_temperature', 'engine-temperature-overheating', 'WARNING_LIGHT', 'COOLING',
+          'Engine temperature / overheating warning', 'An overheating warning means the engine may be outside its safe temperature range.',
+          'Several cooling-system or operating conditions can cause overheating. The warning alone does not identify the cause.',
+          '["Move to a safe place and stop the vehicle.","Switch off the engine if overheating is indicated.","Allow the vehicle to cool before any owner-level inspection."]',
+          '["If steam or coolant is visible.","If the warning returns.","If coolant is leaking or the vehicle cannot maintain a normal temperature."]',
+          'URGENT', 1, 1, 1, 'Garage OS curated owner guidance', 1, 'PUBLISHED',
+          '2026-10-31T00:00:00.000Z', '2026-10-31T00:00:00.000Z'
+        ),
+        (
+          'cca_brake_warning', 'brake-warning-light', 'WARNING_LIGHT', 'BRAKES',
+          'Brake warning light', 'A brake-system warning may indicate a condition requiring prompt inspection.',
+          'The warning may have more than one explanation. Garage OS does not infer that the brakes are safe from pedal feel alone.',
+          '["Check whether the parking brake is fully released.","If braking feels abnormal, stop driving when safe.","Record the issue and arrange professional inspection."]',
+          '["If braking distance changes.","If the pedal feels unusually soft or hard.","If warning lights remain on or braking feels unsafe."]',
+          'URGENT', 1, 1, 1, 'Garage OS curated owner guidance', 1, 'PUBLISHED',
+          '2026-10-31T00:00:00.000Z', '2026-10-31T00:00:00.000Z'
+        ),
+        (
+          'cca_battery', 'battery-charging-warning', 'WARNING_LIGHT', 'ELECTRICAL',
+          'Battery / charging warning', 'The charging system may not be maintaining electrical power.',
+          'This light does not prove that the battery itself is defective. The battery, alternator, belt, wiring or another charging-system condition may need inspection.',
+          '["Reduce unnecessary electrical loads if safe.","Plan to stop somewhere safe before electrical power is depleted.","Record any hard-start or no-start behavior."]',
+          '["If steering assistance changes.","If lights dim significantly.","If the engine stops or will not restart."]',
+          'CAUTION', 1, 1, 1, 'Garage OS curated owner guidance', 1, 'PUBLISHED',
+          '2026-10-31T00:00:00.000Z', '2026-10-31T00:00:00.000Z'
+        ),
+        (
+          'cca_tyre_pressure', 'tyre-pressure-warning', 'WARNING_LIGHT', 'TYRES',
+          'Tyre pressure warning', 'One or more tyres may be outside the expected pressure range, or the monitoring system may need attention.',
+          'A tyre-pressure warning is not proof of a puncture. Pressure should be checked against the vehicle manufacturer placard or manual.',
+          '["Inspect tyres visually for obvious damage.","When safe, check pressures cold against the manufacturer specification.","Do not inflate to the maximum number printed on the tyre sidewall unless that is also the vehicle specification."]',
+          '["If a tyre is visibly damaged.","If pressure drops again after correction.","If handling feels unstable."]',
+          'CAUTION', 0, 1, 0, 'Garage OS curated owner guidance', 1, 'PUBLISHED',
+          '2026-10-31T00:00:00.000Z', '2026-10-31T00:00:00.000Z'
+        ),
+        (
+          'cca_grinding_noise', 'grinding-noise', 'SYMPTOM', 'NOISE',
+          'Grinding noise', 'Grinding is a symptom that should be located and inspected rather than diagnosed from sound alone.',
+          'The source can vary with braking, steering, wheel speed, drivetrain load or other conditions. Context is useful; guessing the failed part is not.',
+          '["Notice when the sound occurs: braking, turning, accelerating, coasting or constantly.","Record the symptom and driving conditions.","Avoid continued driving if braking, steering or wheel behavior is abnormal."]',
+          '["If the sound occurs during braking with reduced braking performance.","If steering or wheel behavior changes.","If the sound rapidly worsens or is accompanied by vibration."]',
+          'CAUTION', 1, 0, 1, 'Garage OS curated owner guidance', 1, 'PUBLISHED',
+          '2026-10-31T00:00:00.000Z', '2026-10-31T00:00:00.000Z'
+        ),
+        (
+          'cca_long_trip', 'long-trip-preparation', 'LONG_TRIP', 'TRIP',
+          'Long-trip preparation', 'A structured owner checklist can reduce avoidable surprises before a long journey.',
+          'An owner checklist is not a professional vehicle inspection. Existing warning lights, unresolved safety issues or overdue critical maintenance should be addressed through the appropriate service workflow.',
+          '["Review maintenance due-state.","Review unresolved vehicle issues.","Complete the Long Trip Preparation mission.","Arrange professional inspection when the vehicle condition is uncertain."]',
+          '["If a safety-critical issue is open.","If critical maintenance is overdue.","If tyres, brakes, steering or cooling show concerning symptoms."]',
+          'INFO', 0, 0, 1, 'Garage OS curated owner guidance', 1, 'PUBLISHED',
+          '2026-10-31T00:00:00.000Z', '2026-10-31T00:00:00.000Z'
+        );
+
+        INSERT OR IGNORE INTO car_care_mission_templates (
+          id, code, mission_type, title, description, disclaimer, status, created_at, updated_at
+        ) VALUES
+        (
+          'ccmt_weekly', 'WEEKLY_OWNER_CHECK', 'WEEKLY_CHECK', 'Quick owner care check',
+          'A short visual and functional review of items an owner can safely observe.',
+          'Completing this checklist does not certify vehicle condition and is not a professional inspection.',
+          'ACTIVE', '2026-10-31T00:00:00.000Z', '2026-10-31T00:00:00.000Z'
+        ),
+        (
+          'ccmt_pretrip', 'PRE_TRIP_CHECK', 'PRE_TRIP', 'Pre-trip check',
+          'A practical owner check before a routine journey.',
+          'This owner check cannot rule out hidden defects. Use professional inspection when condition or safety is uncertain.',
+          'ACTIVE', '2026-10-31T00:00:00.000Z', '2026-10-31T00:00:00.000Z'
+        ),
+        (
+          'ccmt_longtrip', 'LONG_TRIP_PREPARATION', 'LONG_TRIP', 'Long trip preparation',
+          'A more complete readiness checklist before a long-distance journey.',
+          'Checklist completion means the owner reviewed the listed items; it does not mean the vehicle is mechanically certified safe.',
+          'ACTIVE', '2026-10-31T00:00:00.000Z', '2026-10-31T00:00:00.000Z'
+        );
+
+        INSERT OR IGNORE INTO car_care_mission_items (
+          id, template_id, display_order, title, instructions, check_level, safety_level, concern_action, article_slug, created_at
+        ) VALUES
+        ('ccmi_weekly_tyres','ccmt_weekly',1,'Tyres — visual condition','Look for obvious cuts, bulges, objects or a visibly low tyre. Use the vehicle placard/manual for pressure specifications.','OWNER_SAFE_CHECK','CAUTION','OPEN_ISSUE','tyre-pressure-warning','2026-10-31T00:00:00.000Z'),
+        ('ccmi_weekly_lights','ccmt_weekly',2,'Exterior lights','Check that required exterior lights visibly operate.','OWNER_SAFE_CHECK','NORMAL','OPEN_ISSUE',NULL,'2026-10-31T00:00:00.000Z'),
+        ('ccmi_weekly_leaks','ccmt_weekly',3,'New fluid under the parked vehicle','Observe for a new or unexplained fluid leak without touching unknown fluids or hot components.','OWNER_SAFE_CHECK','CAUTION','OPEN_ISSUE',NULL,'2026-10-31T00:00:00.000Z'),
+        ('ccmi_weekly_warnings','ccmt_weekly',4,'Dashboard warnings','Note any warning that remains illuminated after normal startup checks.','OWNER_SAFE_CHECK','CAUTION','OPEN_ISSUE','check-engine-light','2026-10-31T00:00:00.000Z'),
+
+        ('ccmi_pretrip_tyres','ccmt_pretrip',1,'Tyres and visible wheel condition','Check for obvious damage and compare tyre pressure with the manufacturer specification when safe.','OWNER_SAFE_CHECK','CAUTION','OPEN_ISSUE','tyre-pressure-warning','2026-10-31T00:00:00.000Z'),
+        ('ccmi_pretrip_lights','ccmt_pretrip',2,'Lights, indicators and wipers','Confirm visible operation before departure.','OWNER_SAFE_CHECK','NORMAL','OPEN_ISSUE',NULL,'2026-10-31T00:00:00.000Z'),
+        ('ccmi_pretrip_warning','ccmt_pretrip',3,'Warning lights and known issues','Review active Garage OS issues and any persistent warning lights.','OWNER_SAFE_CHECK','CAUTION','OPEN_ISSUE','check-engine-light','2026-10-31T00:00:00.000Z'),
+        ('ccmi_pretrip_maintenance','ccmt_pretrip',4,'Maintenance due-state','Review due and overdue maintenance in Garage OS.','OWNER_SAFE_CHECK','CAUTION','OPEN_MAINTENANCE',NULL,'2026-10-31T00:00:00.000Z'),
+
+        ('ccmi_longtrip_maintenance','ccmt_longtrip',1,'Maintenance readiness','Review overdue/due maintenance before departure.','OWNER_SAFE_CHECK','CAUTION','OPEN_MAINTENANCE','long-trip-preparation','2026-10-31T00:00:00.000Z'),
+        ('ccmi_longtrip_issues','ccmt_longtrip',2,'Unresolved vehicle issues','Review open and persistent issues, especially braking, steering, cooling, tyre or warning-light concerns.','OWNER_SAFE_CHECK','SAFETY_CRITICAL','OPEN_ISSUE','long-trip-preparation','2026-10-31T00:00:00.000Z'),
+        ('ccmi_longtrip_tyres','ccmt_longtrip',3,'Tyres, spare or mobility kit','Inspect visible tyre condition and verify the spare/inflator/repair kit is present if the vehicle uses one.','OWNER_SAFE_CHECK','CAUTION','OPEN_ISSUE','tyre-pressure-warning','2026-10-31T00:00:00.000Z'),
+        ('ccmi_longtrip_fluids','ccmt_longtrip',4,'Owner-accessible fluid checks','Only check fluids that the vehicle manual identifies as safe for owner inspection, with the vehicle in the required condition. Never open a hot cooling system.','OWNER_SAFE_CHECK','CAUTION','OPEN_ISSUE','engine-temperature-overheating','2026-10-31T00:00:00.000Z'),
+        ('ccmi_longtrip_professional','ccmt_longtrip',5,'Professional inspection when condition is uncertain','If there are unresolved safety concerns, abnormal braking/steering, repeat overheating or other uncertainty, arrange professional inspection before travel.','PROFESSIONAL_INSPECTION_ONLY','SAFETY_CRITICAL','OPEN_BOOKINGS','long-trip-preparation','2026-10-31T00:00:00.000Z');
+      `);
+    },
+    down: (db) => {
+      db.exec(`
+        DROP TABLE IF EXISTS vehicle_care_mission_item_progress;
+        DROP TABLE IF EXISTS vehicle_care_missions;
+        DROP TABLE IF EXISTS car_care_mission_items;
+        DROP TABLE IF EXISTS car_care_mission_templates;
+        DROP TABLE IF EXISTS car_care_articles;
+      `);
+    },
+  },
 ];
 
 /**
