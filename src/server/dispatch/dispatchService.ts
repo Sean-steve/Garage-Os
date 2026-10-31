@@ -635,6 +635,12 @@ export class DispatchService {
       throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, `Tracking record for assignment ${params.assignmentId} not found`);
     }
 
+    const elevatedRoles = new Set(['PLATFORM_ADMIN', 'OPERATIONS', 'TRUST_AND_SAFETY']);
+    const isElevated = Boolean(params.requesterRole && elevatedRoles.has(params.requesterRole));
+    if (tracking.customer_user_id && tracking.customer_user_id !== params.requesterUserId && !isElevated) {
+      throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Tracking access denied', 403);
+    }
+
     // Check freshness: recalculate based on current wall clock
     const request = dispatchRepository.getRequestById(tracking.dispatch_request_id, db);
     if (request?.assigned_responder_id) {

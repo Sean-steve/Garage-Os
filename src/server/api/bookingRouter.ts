@@ -24,6 +24,8 @@ import {
   OrganizationType,
 } from '../identity/types';
 import { BookingStatus, QuoteStatus } from '../booking/types';
+import { getDatabase } from '../database/connection';
+import { PlatformRole } from '../identity/types';
 
 export const bookingRouter = Router();
 
@@ -31,65 +33,45 @@ export const bookingRouter = Router();
 bookingRouter.use(authenticate({ optional: true }));
 
 function getActor(req: Request): AuthenticatedActorContext & { actor_id: string; roles: string[] } {
-  if (req.actor) {
-    const roles: string[] = [];
-    if (req.actor.active_membership?.role) {
-      roles.push(req.actor.active_membership.role);
-    }
-    if (req.actor.platform_roles) {
-      roles.push(...req.actor.platform_roles);
-    }
-    return {
-      ...req.actor,
-      actor_id: req.actor.user_id || req.actor.id,
-      roles,
-    };
+  if (!req.actor) {
+    throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Authentication required', 401);
   }
-
-  // Fallback dev context (Customer / Member default)
+  const roles: string[] = [];
+  if (req.actor.active_membership?.role) roles.push(req.actor.active_membership.role);
+  if (req.actor.platform_roles) roles.push(...req.actor.platform_roles);
   return {
-    id: 'usr_dev_customer_01',
-    user_id: 'usr_dev_customer_01',
-    actor_id: 'usr_dev_customer_01',
-    session_id: 'sess_dev_cust_01',
-    email: 'customer@garage-os.local',
-    account_status: AccountStatus.ACTIVE,
-    platform_roles: [],
-    profile: {
-      user_id: 'usr_dev_customer_01',
-      display_name: 'Dev Customer',
-      first_name: 'Dev',
-      last_name: 'Customer',
-      preferred_language: 'en',
-      timezone: 'Africa/Nairobi',
-      country: 'KE',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    memberships: [
-      {
-        membership_id: 'mem_dev_cust_01',
-        organization_id: 'org_dev_cust_01',
-        organization_name: 'Customer Org',
-        organization_type: OrganizationType.GARAGE,
-        organization_status: OrganizationStatus.ACTIVE,
-        role: MembershipRole.OWNER,
-        status: MembershipStatus.ACTIVE,
-      },
-    ],
-    active_organization_id: 'org_dev_cust_01',
-    active_membership: {
-      membership_id: 'mem_dev_cust_01',
-      organization_id: 'org_dev_cust_01',
-      organization_name: 'Customer Org',
-      organization_type: OrganizationType.GARAGE,
-      organization_status: OrganizationStatus.ACTIVE,
-      role: MembershipRole.OWNER,
-      status: MembershipStatus.ACTIVE,
-      permissions: [],
-    },
-    roles: [MembershipRole.OWNER],
+    ...req.actor,
+    actor_id: req.actor.user_id || req.actor.id,
+    roles,
   };
+}
+
+function isElevated(actor: AuthenticatedActorContext): boolean {
+  return actor.platform_roles.some((role) =>
+    [PlatformRole.PLATFORM_ADMIN, PlatformRole.OPERATIONS, PlatformRole.TRUST_AND_SAFETY].includes(role)
+  );
+}
+
+function actorProviderIds(actor: AuthenticatedActorContext): string[] {
+  const orgIds = actor.memberships.filter((m) => m.status === MembershipStatus.ACTIVE).map((m) => m.organization_id);
+  if (orgIds.length === 0) return [];
+  const placeholders = orgIds.map(() => '?').join(',');
+  const rows = getDatabase().prepare(
+    `SELECT id FROM service_providers WHERE organization_id IN (${placeholders}) AND status = 'ACTIVE';`
+  ).all(...orgIds) as Array<{ id: string }>;
+  return rows.map((r) => r.id);
+}
+
+function assertBookingAccess(actor: AuthenticatedActorContext, bookingId: string): void {
+  const booking = bookingService.getBooking(bookingId);
+  if (isElevated(actor) || booking.customer_user_id === actor.user_id || actorProviderIds(actor).includes(booking.provider_id)) return;
+  throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Booking access denied', 403);
+}
+
+function assertQuoteAccess(actor: AuthenticatedActorContext, quoteId: string): void {
+  const quote = bookingService.getQuote(quoteId);
+  if (isElevated(actor) || quote.customer_user_id === actor.user_id || actorProviderIds(actor).includes(quote.provider_id)) return;
+  throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Quote access denied', 403);
 }
 
 // ===========================================================================
@@ -195,15 +177,27 @@ bookingRouter.post('/bookings', (req: Request, res: Response, next: NextFunction
 
 bookingRouter.get('/bookings', (req: Request, res: Response, next: NextFunction) => {
   try {
+    const actor = getActor(req);
+    const providers = actorProviderIds(actor);
+    const requestedProvider = req.query.provider_id as string | undefined;
     const filters = {
-      customer_user_id: req.query.customer_user_id as string | undefined,
-      provider_id: req.query.provider_id as string | undefined,
+      customer_user_id: isElevated(actor) ? (req.query.customer_user_id as string | undefined) : (providers.length ? undefined : actor.user_id),
+      provider_id: isElevated(actor) ? requestedProvider : (requestedProvider && providers.includes(requestedProvider) ? requestedProvider : providers[0]),
       branch_id: req.query.branch_id as string | undefined,
       vehicle_id: req.query.vehicle_id as string | undefined,
       status: req.query.status as BookingStatus | undefined,
     };
     const bookings = bookingService.listBookings(filters);
     res.json({ success: true, count: bookings.length, data: bookings });
+  } catch (err) {
+    next(err);
+  }
+});
+
+bookingRouter.use('/bookings/:id', (req: Request, _res: Response, next: NextFunction) => {
+  try {
+    assertBookingAccess(getActor(req), req.params.id);
+    next();
   } catch (err) {
     next(err);
   }
@@ -341,15 +335,27 @@ bookingRouter.post('/quotes', (req: Request, res: Response, next: NextFunction) 
 
 bookingRouter.get('/quotes', (req: Request, res: Response, next: NextFunction) => {
   try {
+    const actor = getActor(req);
+    const providers = actorProviderIds(actor);
+    const requestedProvider = req.query.provider_id as string | undefined;
     const filters = {
       booking_id: req.query.booking_id as string | undefined,
       service_case_id: req.query.service_case_id as string | undefined,
-      provider_id: req.query.provider_id as string | undefined,
-      customer_user_id: req.query.customer_user_id as string | undefined,
+      provider_id: isElevated(actor) ? requestedProvider : (requestedProvider && providers.includes(requestedProvider) ? requestedProvider : providers[0]),
+      customer_user_id: isElevated(actor) ? (req.query.customer_user_id as string | undefined) : (providers.length ? undefined : actor.user_id),
       status: req.query.status as QuoteStatus | undefined,
     };
     const quotes = bookingService.listQuotes(filters);
     res.json({ success: true, count: quotes.length, data: quotes });
+  } catch (err) {
+    next(err);
+  }
+});
+
+bookingRouter.use('/quotes/:id', (req: Request, _res: Response, next: NextFunction) => {
+  try {
+    assertQuoteAccess(getActor(req), req.params.id);
+    next();
   } catch (err) {
     next(err);
   }

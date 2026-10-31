@@ -3,11 +3,15 @@
  * REST endpoints and Server-Sent Events for real-time dispatch, location, and operations.
  */
 
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { dispatchService } from './dispatchService';
 import { locationService } from './locationService';
 import { dispatchRepository } from './dispatchRepository';
 import { realtimeBus } from './realtimeBus';
+import { authenticate } from '../api/authMiddleware';
+import { getDatabase } from '../database/connection';
+import { PlatformRole } from '../identity/types';
+import { CanonicalAppError, ErrorCode } from '../../shared/errors';
 import {
   DispatchDomain,
   DispatchPriority,
@@ -19,6 +23,44 @@ import {
 
 export const dispatchRouter = Router();
 
+dispatchRouter.use(authenticate());
+
+function isOperationsActor(req: Request): boolean {
+  return Boolean(req.actor?.platform_roles?.some((role) =>
+    [PlatformRole.PLATFORM_ADMIN, PlatformRole.OPERATIONS, PlatformRole.TRUST_AND_SAFETY].includes(role)
+  ));
+}
+
+function requireOperations(req: Request, _res: Response, next: NextFunction): void {
+  if (!isOperationsActor(req)) {
+    return next(new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Dispatch operations access required', 403));
+  }
+  next();
+}
+
+function canManageProvider(req: Request, providerId: string): boolean {
+  if (isOperationsActor(req)) return true;
+  const db = getDatabase();
+  const provider = db.prepare('SELECT organization_id FROM service_providers WHERE id = ? LIMIT 1;')
+    .get(providerId) as { organization_id?: string } | undefined;
+  if (!provider?.organization_id || !req.actor) return false;
+  return req.actor.memberships.some((m) =>
+    m.organization_id === provider.organization_id && m.status === 'ACTIVE'
+  );
+}
+
+function assertResponderAccess(req: Request, responderId: string, providerId?: string): void {
+  if (req.actor?.user_id === responderId || req.actor?.id === responderId || isOperationsActor(req)) return;
+  if (providerId && canManageProvider(req, providerId)) return;
+
+  const db = getDatabase();
+  const presence = db.prepare('SELECT provider_id FROM responder_presence WHERE responder_reference_id = ? LIMIT 1;')
+    .get(responderId) as { provider_id?: string } | undefined;
+  if (presence?.provider_id && canManageProvider(req, presence.provider_id)) return;
+
+  throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Responder access denied', 403);
+}
+
 /**
  * 1. Update responder presence and heartbeat
  */
@@ -26,6 +68,7 @@ dispatchRouter.post('/responders/:responderId/presence', async (req: Request, re
   try {
     const { responderId } = req.params;
     const { provider_id, responder_type, status, current_job_reference } = req.body;
+    assertResponderAccess(req, responderId, provider_id);
 
     const presence = locationService.updatePresence({
       provider_id: provider_id || 'unknown_provider',
@@ -50,6 +93,7 @@ dispatchRouter.post('/responders/:responderId/presence', async (req: Request, re
 dispatchRouter.post('/responders/:responderId/location', async (req: Request, res: Response) => {
   try {
     const { responderId } = req.params;
+    assertResponderAccess(req, responderId);
     const {
       responder_type,
       latitude,
@@ -98,6 +142,7 @@ dispatchRouter.post('/responders/:responderId/location', async (req: Request, re
 dispatchRouter.get('/responders/:responderId/location', async (req: Request, res: Response) => {
   try {
     const { responderId } = req.params;
+    assertResponderAccess(req, responderId);
     const location = locationService.getCurrentLocation(responderId);
     if (!location) {
       return res.status(404).json({ error: 'Location not found for responder' });
@@ -180,13 +225,17 @@ dispatchRouter.get('/requests/:id', async (req: Request, res: Response) => {
  */
 dispatchRouter.post('/requests/:id/offers/:offerId/accept', async (req: Request, res: Response) => {
   try {
-    const { responder_reference_id, actor } = req.body;
+    const { responder_reference_id } = req.body;
 
     const result = await dispatchService.acceptOffer({
       dispatchRequestId: req.params.id,
       offerId: req.params.offerId,
       responderReferenceId: responder_reference_id,
-      actor: actor || { id: 'api_actor', role: 'PROVIDER' },
+      actor: {
+        id: req.actor!.user_id,
+        role: req.actor!.platform_roles[0] || req.actor!.active_membership?.role || 'PROVIDER',
+        name: req.actor!.profile.display_name,
+      },
     });
 
     res.json({ success: true, data: result });
@@ -198,15 +247,19 @@ dispatchRouter.post('/requests/:id/offers/:offerId/accept', async (req: Request,
 /**
  * 7. Manual assignment with override audit
  */
-dispatchRouter.post('/requests/:id/manual-assign', async (req: Request, res: Response) => {
+dispatchRouter.post('/requests/:id/manual-assign', requireOperations, async (req: Request, res: Response) => {
   try {
-    const { candidate_id, override_reason, actor } = req.body;
+    const { candidate_id, override_reason } = req.body;
 
     const result = await dispatchService.manualAssign({
       dispatchRequestId: req.params.id,
       candidateId: candidate_id,
       overrideReason: override_reason,
-      actor: actor || { id: 'dispatcher', role: 'OPERATIONS_AGENT', name: 'Dispatcher Agent' },
+      actor: {
+        id: req.actor!.user_id,
+        role: req.actor!.platform_roles[0] || 'OPERATIONS',
+        name: req.actor!.profile.display_name,
+      },
     });
 
     res.json({ success: true, data: result });
@@ -218,14 +271,18 @@ dispatchRouter.post('/requests/:id/manual-assign', async (req: Request, res: Res
 /**
  * 8. Emergency Reassignment
  */
-dispatchRouter.post('/requests/:id/reassign', async (req: Request, res: Response) => {
+dispatchRouter.post('/requests/:id/reassign', requireOperations, async (req: Request, res: Response) => {
   try {
-    const { reason, actor } = req.body;
+    const { reason } = req.body;
 
     const result = await dispatchService.reassign({
       dispatchRequestId: req.params.id,
       reason: reason || 'Responder delayed / uncommunicative',
-      actor: actor || { id: 'dispatcher', role: 'OPERATIONS_AGENT', name: 'Dispatcher Agent' },
+      actor: {
+        id: req.actor!.user_id,
+        role: req.actor!.platform_roles[0] || 'OPERATIONS',
+        name: req.actor!.profile.display_name,
+      },
     });
 
     res.json({ success: true, data: result });
@@ -239,13 +296,10 @@ dispatchRouter.post('/requests/:id/reassign', async (req: Request, res: Response
  */
 dispatchRouter.get('/tracking/:assignmentId', async (req: Request, res: Response) => {
   try {
-    const requesterUserId = (req.query.userId as string) || 'customer_demo';
-    const requesterRole = (req.query.role as string) || 'CUSTOMER';
-
     const trackingView = dispatchService.getTrackingView({
       assignmentId: req.params.assignmentId,
-      requesterUserId,
-      requesterRole,
+      requesterUserId: req.actor!.user_id,
+      requesterRole: req.actor!.platform_roles[0] || req.actor!.active_membership?.role || 'CUSTOMER',
     });
 
     res.json({ success: true, data: trackingView });
@@ -257,7 +311,7 @@ dispatchRouter.get('/tracking/:assignmentId', async (req: Request, res: Response
 /**
  * 10. Operations Command Overview
  */
-dispatchRouter.get('/operations/overview', async (req: Request, res: Response) => {
+dispatchRouter.get('/operations/overview', requireOperations, async (req: Request, res: Response) => {
   try {
     const overview = dispatchRepository.getOperationsOverview();
     res.json({ success: true, data: overview });
@@ -276,11 +330,15 @@ dispatchRouter.get('/events', (req: Request, res: Response) => {
   res.flushHeaders?.();
 
   const clientId = `sse_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-  const topicsParam = (req.query.topics as string) || '*';
-  const topics = topicsParam.split(',').map((t) => t.trim());
+  const topicsParam = (req.query.topics as string) || '';
+  const topics = topicsParam.split(',').map((t) => t.trim()).filter(Boolean);
+  if (topics.length === 0) {
+    return res.status(400).json({ error: 'At least one authorized topic is required' });
+  }
 
-  realtimeBus.registerSseClient(clientId, res, topics, {
-    userId: req.query.userId as string,
-    role: req.query.role as string,
-  });
+  try {
+    realtimeBus.registerSseClient(clientId, res, topics, req.actor!);
+  } catch {
+    return res.status(403).json({ error: 'Realtime subscription access denied' });
+  }
 });

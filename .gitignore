@@ -6,3 +6,9 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Local runtime database and WAL artifacts
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/storage/

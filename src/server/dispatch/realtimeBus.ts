@@ -1,6 +1,11 @@
 /**
- * Garage OS — Sprint 14: Real-Time Event Bus & WebSocket/SSE Infrastructure (GAR-016)
- * Server-authoritative real-time streaming for dispatch, location, and operations.
+ * Garage OS — Sprint 14: Authenticated Real-Time Event Bus (GAR-016)
+ *
+ * R1 hardening:
+ * - WebSocket connections begin unauthenticated and cannot subscribe until AUTH succeeds.
+ * - Subscription topics are authorized server-side against current actor/resource context.
+ * - SSE callers must arrive with an authenticated actor supplied by the HTTP router.
+ * - No user/role/provider identity is trusted from URL query parameters.
  */
 
 import { WebSocketServer, WebSocket } from 'ws';
@@ -8,6 +13,9 @@ import { Server as HttpServer } from 'http';
 import { Response } from 'express';
 import { getCurrentUtcIsoString } from '../domain/time';
 import { logger } from '../observability/logger';
+import { authService } from '../identity/authService';
+import { AuthenticatedActorContext, PlatformRole } from '../identity/types';
+import { getDatabase } from '../database/connection';
 
 export interface DispatchRealtimeEvent<T = any> {
   topic: string;
@@ -21,9 +29,68 @@ export interface ClientSubscription {
   socket?: WebSocket;
   sseResponse?: Response;
   topics: Set<string>;
-  userId?: string;
-  role?: string;
-  providerId?: string;
+  actor?: AuthenticatedActorContext;
+  authenticated: boolean;
+}
+
+function isPlatformOperations(actor?: AuthenticatedActorContext): boolean {
+  if (!actor) return false;
+  return actor.platform_roles.some((role) =>
+    [PlatformRole.PLATFORM_ADMIN, PlatformRole.OPERATIONS, PlatformRole.TRUST_AND_SAFETY].includes(role)
+  );
+}
+
+function actorBelongsToProvider(actor: AuthenticatedActorContext | undefined, providerId: string): boolean {
+  if (!actor) return false;
+  if (isPlatformOperations(actor)) return true;
+
+  const db = getDatabase();
+  const provider = db.prepare(
+    'SELECT organization_id FROM service_providers WHERE id = ? LIMIT 1;'
+  ).get(providerId) as { organization_id?: string } | undefined;
+
+  if (!provider?.organization_id) return false;
+  return actor.memberships.some(
+    (membership) =>
+      membership.organization_id === provider.organization_id &&
+      membership.status === 'ACTIVE'
+  );
+}
+
+function canSubscribe(actor: AuthenticatedActorContext | undefined, topic: string): boolean {
+  if (!actor) return false;
+
+  if (topic === 'operations.dispatch' || topic === '*') {
+    return isPlatformOperations(actor);
+  }
+
+  if (topic.startsWith('assignment.')) {
+    const assignmentId = topic.slice('assignment.'.length);
+    const db = getDatabase();
+    const tracking = db.prepare(
+      'SELECT customer_user_id, tracking_access_status FROM dispatch_tracking_projections WHERE assignment_id = ? LIMIT 1;'
+    ).get(assignmentId) as { customer_user_id?: string | null; tracking_access_status?: string } | undefined;
+
+    if (!tracking) return false;
+    if (tracking.tracking_access_status !== 'ACTIVE' && !isPlatformOperations(actor)) return false;
+    return tracking.customer_user_id === actor.user_id || isPlatformOperations(actor);
+  }
+
+  if (topic.startsWith('responder.')) {
+    const responderId = topic.slice('responder.'.length);
+    const db = getDatabase();
+    const presence = db.prepare(
+      'SELECT provider_id FROM responder_presence WHERE responder_reference_id = ? LIMIT 1;'
+    ).get(responderId) as { provider_id?: string } | undefined;
+    return Boolean(presence?.provider_id && actorBelongsToProvider(actor, presence.provider_id));
+  }
+
+  // Dispatch request topics are operations-only. Customer tracking uses assignment.{id}.
+  if (topic.startsWith('dispatch.request.')) {
+    return isPlatformOperations(actor);
+  }
+
+  return false;
 }
 
 export class RealtimeBus {
@@ -32,9 +99,6 @@ export class RealtimeBus {
   private sseClients = new Map<string, ClientSubscription>();
   private sequenceCounter = 0;
 
-  /**
-   * Initializes the WebSocket server attached to the existing HTTP server
-   */
   init(server: HttpServer) {
     if (this.wss) return;
 
@@ -43,66 +107,100 @@ export class RealtimeBus {
       path: '/api/v1/dispatch/ws',
     });
 
-    this.wss.on('connection', (socket: WebSocket, req) => {
-      const url = new URL(req.url || '', `http://${req.headers.host}`);
-      const userId = url.searchParams.get('userId') || undefined;
-      const role = url.searchParams.get('role') || 'CUSTOMER';
-      const providerId = url.searchParams.get('providerId') || undefined;
-      const initialTopic = url.searchParams.get('topic');
-
+    this.wss.on('connection', (socket: WebSocket) => {
       const subscription: ClientSubscription = {
         socket,
         topics: new Set<string>(),
-        userId,
-        role,
-        providerId,
+        authenticated: false,
       };
-
-      if (initialTopic) {
-        subscription.topics.add(initialTopic);
-      }
-
       this.wsClients.set(socket, subscription);
-      logger.info(`WebSocket client connected: userId=${userId}, role=${role}`);
 
-      // Send greeting & initial connection state
-      socket.send(
-        JSON.stringify({
-          topic: 'system',
-          sequence: ++this.sequenceCounter,
-          event: 'CONNECTED',
-          data: { connected: true, timestamp: getCurrentUtcIsoString() },
-          timestamp: getCurrentUtcIsoString(),
-        })
-      );
+      socket.send(JSON.stringify({
+        topic: 'system',
+        sequence: ++this.sequenceCounter,
+        event: 'AUTH_REQUIRED',
+        data: { authenticated: false },
+        timestamp: getCurrentUtcIsoString(),
+      }));
 
       socket.on('message', (message: string) => {
         try {
           const parsed = JSON.parse(message.toString());
-          if (parsed.action === 'SUBSCRIBE' && parsed.topic) {
-            subscription.topics.add(parsed.topic);
-            socket.send(
-              JSON.stringify({
-                topic: parsed.topic,
+
+          if (parsed.action === 'AUTH') {
+            const token = typeof parsed.sessionToken === 'string' ? parsed.sessionToken.trim() : '';
+            const activeOrgId = typeof parsed.organizationId === 'string' ? parsed.organizationId : undefined;
+            const actor = token ? authService.authenticateSession(token, activeOrgId) : null;
+
+            if (!actor) {
+              socket.send(JSON.stringify({
+                topic: 'system',
                 sequence: ++this.sequenceCounter,
-                event: 'SUBSCRIBED',
-                data: { topic: parsed.topic },
+                event: 'AUTH_FAILED',
+                data: { authenticated: false },
                 timestamp: getCurrentUtcIsoString(),
-              })
-            );
+              }));
+              socket.close(1008, 'Authentication required');
+              return;
+            }
+
+            subscription.actor = actor;
+            subscription.authenticated = true;
+            subscription.topics.clear();
+            socket.send(JSON.stringify({
+              topic: 'system',
+              sequence: ++this.sequenceCounter,
+              event: 'AUTHENTICATED',
+              data: { authenticated: true, userId: actor.user_id },
+              timestamp: getCurrentUtcIsoString(),
+            }));
+            return;
+          }
+
+          if (!subscription.authenticated || !subscription.actor) {
+            socket.send(JSON.stringify({
+              topic: 'system',
+              sequence: ++this.sequenceCounter,
+              event: 'AUTH_REQUIRED',
+              data: { authenticated: false },
+              timestamp: getCurrentUtcIsoString(),
+            }));
+            return;
+          }
+
+          if (parsed.action === 'SUBSCRIBE' && parsed.topic) {
+            const topic = String(parsed.topic);
+            if (!canSubscribe(subscription.actor, topic)) {
+              socket.send(JSON.stringify({
+                topic,
+                sequence: ++this.sequenceCounter,
+                event: 'SUBSCRIPTION_DENIED',
+                data: { topic },
+                timestamp: getCurrentUtcIsoString(),
+              }));
+              return;
+            }
+
+            subscription.topics.add(topic);
+            socket.send(JSON.stringify({
+              topic,
+              sequence: ++this.sequenceCounter,
+              event: 'SUBSCRIBED',
+              data: { topic },
+              timestamp: getCurrentUtcIsoString(),
+            }));
           } else if (parsed.action === 'UNSUBSCRIBE' && parsed.topic) {
-            subscription.topics.delete(parsed.topic);
+            subscription.topics.delete(String(parsed.topic));
           } else if (parsed.action === 'PING') {
             socket.send(JSON.stringify({ action: 'PONG', timestamp: getCurrentUtcIsoString() }));
           }
         } catch (err) {
-          logger.warn(`Failed to parse WebSocket message: ${err}`);
+          logger.warn(`Failed to process WebSocket message: ${err}`);
         }
       });
 
       socket.on('close', () => {
         this.wsClients.delete(socket);
-        logger.info(`WebSocket client disconnected: userId=${userId}`);
       });
 
       socket.on('error', (err) => {
@@ -111,29 +209,28 @@ export class RealtimeBus {
       });
     });
 
-    logger.info('Real-Time WebSocket Server initialized on /api/v1/dispatch/ws');
+    logger.info('Authenticated Real-Time WebSocket Server initialized on /api/v1/dispatch/ws');
   }
 
-  /**
-   * Registers a Server-Sent Events (SSE) client
-   */
   registerSseClient(
     clientId: string,
     res: Response,
     topics: string[],
-    userContext?: { userId?: string; role?: string; providerId?: string }
+    actor: AuthenticatedActorContext
   ) {
+    const authorizedTopics = topics.filter((topic) => canSubscribe(actor, topic));
+    if (authorizedTopics.length !== topics.length) {
+      throw new Error('One or more requested realtime topics are not authorized');
+    }
+
     const subscription: ClientSubscription = {
       sseResponse: res,
-      topics: new Set(topics),
-      userId: userContext?.userId,
-      role: userContext?.role,
-      providerId: userContext?.providerId,
+      topics: new Set(authorizedTopics),
+      actor,
+      authenticated: true,
     };
 
     this.sseClients.set(clientId, subscription);
-
-    // Initial SSE connected message
     res.write(`event: connected\ndata: ${JSON.stringify({ connected: true, clientId })}\n\n`);
 
     res.on('close', () => {
@@ -141,9 +238,6 @@ export class RealtimeBus {
     });
   }
 
-  /**
-   * Broadcasts an event to all clients subscribed to the topic (both WebSocket and SSE)
-   */
   publish<T>(topic: string, event: string, data: T): DispatchRealtimeEvent<T> {
     const payload: DispatchRealtimeEvent<T> = {
       topic,
@@ -155,9 +249,14 @@ export class RealtimeBus {
 
     const messageString = JSON.stringify(payload);
 
-    // 1. Deliver to WebSocket subscribers
     for (const [socket, sub] of this.wsClients.entries()) {
-      if (socket.readyState === WebSocket.OPEN && (sub.topics.has(topic) || sub.topics.has('*'))) {
+      if (
+        socket.readyState === WebSocket.OPEN &&
+        sub.authenticated &&
+        sub.actor &&
+        sub.topics.has(topic) &&
+        canSubscribe(sub.actor, topic)
+      ) {
         try {
           socket.send(messageString);
         } catch (err) {
@@ -166,13 +265,18 @@ export class RealtimeBus {
       }
     }
 
-    // 2. Deliver to SSE subscribers
     for (const [, sub] of this.sseClients.entries()) {
-      if (sub.sseResponse && (sub.topics.has(topic) || sub.topics.has('*'))) {
+      if (
+        sub.sseResponse &&
+        sub.authenticated &&
+        sub.actor &&
+        sub.topics.has(topic) &&
+        canSubscribe(sub.actor, topic)
+      ) {
         try {
           sub.sseResponse.write(`event: ${event}\ndata: ${messageString}\n\n`);
-        } catch (err) {
-          // Client disconnected
+        } catch {
+          // Client disconnect is handled by the close listener.
         }
       }
     }

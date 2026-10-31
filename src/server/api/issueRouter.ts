@@ -6,6 +6,7 @@ import { Router, Request, Response } from 'express';
 import { authenticate } from './authMiddleware';
 import { issueService } from '../issues/issueService';
 import { issueRepository } from '../issues/issueRepository';
+import { vehicleService } from '../vehicle/vehicleService';
 import {
   IssueCategory,
   IssueSeverity,
@@ -22,11 +23,19 @@ import { logger } from '../observability/logger';
 export const issueRouter = Router();
 
 // Middleware: Authenticate for all endpoints (optional in dev, extracts actor)
-issueRouter.use(authenticate({ optional: true }));
+issueRouter.use(authenticate());
+issueRouter.use('/vehicles/:id', (req, _res, next) => {
+  try {
+    vehicleService.getVehicleDetails(req.actor!, req.params.id);
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
 
 function getActorInfo(req: Request): { actorId: string; actorType: CanonicalActorType } {
-  const actorId = req.actor?.id || req.actor?.user_id || 'usr_seed_owner_01';
-  const actorType = (req.actor?.type as CanonicalActorType) || CanonicalActorType.VEHICLE_OWNER;
+  const actorId = req.actor!.id || req.actor!.user_id;
+  const actorType = (req.actor!.type as CanonicalActorType) || CanonicalActorType.VEHICLE_OWNER;
   return { actorId, actorType };
 }
 

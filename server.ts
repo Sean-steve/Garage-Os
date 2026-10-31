@@ -28,7 +28,7 @@ import { securityHeadersMiddleware } from './src/server/security/headers';
 import { correlationMiddleware } from './src/server/security/correlation';
 import { rateLimiter } from './src/server/security/rateLimiter';
 import { idempotencyMiddleware } from './src/server/security/idempotency';
-import { canonicalEnvelopeMiddleware, authContextMiddleware, canonicalErrorHandler } from './src/server/api/middleware';
+import { canonicalEnvelopeMiddleware, canonicalErrorHandler } from './src/server/api/middleware';
 import { apiV1Router } from './src/server/api/router';
 import { registerIdentityJobs } from './src/server/identity/identityJobs';
 import { timelineProjector } from './src/server/timeline/timelineProjector';
@@ -153,7 +153,7 @@ async function bootstrapServer() {
 
   // 8. Construct Express App
   const app = express();
-  const PORT = 3000;
+  const PORT = config.PORT;
 
   // Security & standard middlewares
   app.use(securityHeadersMiddleware);
@@ -176,7 +176,6 @@ async function bootstrapServer() {
   app.use(correlationMiddleware);
   app.use(rateLimiter.getMiddleware());
   app.use(canonicalEnvelopeMiddleware);
-  app.use(authContextMiddleware);
   app.use(idempotencyMiddleware);
 
   // Health and Metrics endpoints (GAR-002, GAR-045)
@@ -215,7 +214,7 @@ async function bootstrapServer() {
     });
   }
 
-  // Bind to 0.0.0.0 and PORT 3000
+  // Bind to 0.0.0.0 using configured port
   const server = app.listen(PORT, '0.0.0.0', () => {
     logger.info(`Garage OS Canonical Platform online and listening on http://0.0.0.0:${PORT}`);
   });

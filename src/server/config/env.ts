@@ -40,6 +40,7 @@ const EnvSchema = z.object({
   RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000),
   RATE_LIMIT_MAX_REQUESTS: z.coerce.number().default(120),
   IDEMPOTENCY_RETENTION_HOURS: z.coerce.number().default(24),
+  ALLOW_DEV_ACTOR_HEADERS: z.string().default('false').transform((v) => v === 'true'),
 
   // Auth placeholders (GAR-003)
   JWT_SECRET: z.string().default('dev-insecure-secret-replace-in-production'),
@@ -105,6 +106,7 @@ export function getSanitizedConfig(): Record<string, unknown> {
       window_ms: cfg.RATE_LIMIT_WINDOW_MS,
       max_requests: cfg.RATE_LIMIT_MAX_REQUESTS,
     },
+    dev_actor_headers_enabled: cfg.APP_ENV !== 'production' && cfg.ALLOW_DEV_ACTOR_HEADERS,
     adapters: {
       payment: cfg.PAYMENT_GATEWAY_ADAPTER,
       messaging: cfg.MESSAGING_ADAPTER,

@@ -20,7 +20,7 @@ import { CanonicalAppError, ErrorCode } from '../../shared/errors';
 export const fuelExpenseRouter = Router();
 
 // Middleware: Authenticate actor context (populates req.actor)
-fuelExpenseRouter.use(authenticate({ optional: true }));
+fuelExpenseRouter.use(authenticate());
 
 function getActor(req: Request) {
   if (!req.actor) {
