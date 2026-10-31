@@ -173,6 +173,6 @@ safetyRouter.post('/sos/incidents/:id/trusted-contact-access/revoke', (req: Requ
   }
 });
 
-// No external-emergency-service dispatch endpoint and no trusted-contact token
-// endpoint exist in Sprint 16. Provider dispatch, portal access and automatic
-// escalation must remain explicit later-sprint capabilities.
+// Sprint 17 adds scoped trusted-contact access through a separate public token router.
+// External emergency-service dispatch and automatic escalation remain unavailable
+// until their owning later sprints implement and certify those capabilities.
