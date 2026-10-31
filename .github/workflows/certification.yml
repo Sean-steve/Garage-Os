@@ -30,7 +30,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -51,8 +51,19 @@ jobs:
       - name: Authentication regression guard
         shell: bash
         run: |
-          if grep -R "role=query\|userId=query" src/server/dispatch >/dev/null 2>&1; then
-            echo "Query-string identity regression detected."
+          if grep -E "authenticate\(\{ optional: true \}\)" \
+            src/server/api/bookingRouter.ts \
+            src/server/api/operationsRouter.ts \
+            src/server/api/roadsideRouter.ts \
+            src/server/api/towingRouter.ts \
+            src/server/dispatch/dispatchRouter.ts >/dev/null 2>&1; then
+            echo "Optional authentication regression detected on a protected Sprint 10-14 surface."
+            exit 1
+          fi
+
+          if grep -E "searchParams\.get\('(userId|role|providerId)'\)" \
+            src/server/dispatch/realtimeBus.ts >/dev/null 2>&1; then
+            echo "Query-string realtime identity regression detected."
             exit 1
           fi
 
