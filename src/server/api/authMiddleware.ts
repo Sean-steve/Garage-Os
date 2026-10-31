@@ -16,6 +16,20 @@ import { CanonicalPermission } from '../identity/rbac';
 import { AccountStatus, AuthenticatedActorContext } from '../identity/types';
 import { config } from '../config/env';
 
+export const GARAGE_OS_SESSION_COOKIE = 'garage_os_session';
+
+function readCookie(cookieHeader: string | undefined, name: string): string | undefined {
+  if (!cookieHeader) return undefined;
+  for (const pair of cookieHeader.split(';')) {
+    const separator = pair.indexOf('=');
+    if (separator < 0) continue;
+    const key = pair.slice(0, separator).trim();
+    if (key !== name) continue;
+    return decodeURIComponent(pair.slice(separator + 1).trim());
+  }
+  return undefined;
+}
+
 declare global {
   namespace Express {
     interface Request {
@@ -37,6 +51,8 @@ export function authenticate(options: { optional?: boolean } = {}) {
         token = authHeader.substring(7).trim();
       } else if (typeof req.headers['x-session-token'] === 'string') {
         token = req.headers['x-session-token'].trim();
+      } else {
+        token = readCookie(req.headers.cookie, GARAGE_OS_SESSION_COOKIE);
       }
 
       const activeOrgId = (req.headers['x-organization-id'] as string) || undefined;
