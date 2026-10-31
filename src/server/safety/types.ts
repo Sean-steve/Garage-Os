@@ -249,3 +249,96 @@ export interface SosIncidentAggregate {
     assistance_arrived: boolean;
   };
 }
+
+
+export enum TrustedContactGrantStatus {
+  ACTIVE = 'ACTIVE',
+  REVOKED = 'REVOKED',
+  EXPIRED = 'EXPIRED',
+}
+
+export enum TrustedContactResponse {
+  ACKNOWLEDGED = 'ACKNOWLEDGED',
+  CONTACTING_USER = 'CONTACTING_USER',
+  CANNOT_ASSIST = 'CANNOT_ASSIST',
+}
+
+export interface TrustedContactAccessGrant {
+  id: string;
+  incident_id: string;
+  contact_id: string;
+  notification_attempt_id: string;
+  token_digest: string;
+  status: TrustedContactGrantStatus;
+  expires_at: string;
+  first_accessed_at?: string | null;
+  last_accessed_at?: string | null;
+  revoked_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TrustedContactResponseRecord {
+  id: string;
+  grant_id: string;
+  incident_id: string;
+  contact_id: string;
+  response: TrustedContactResponse;
+  created_at: string;
+}
+
+export interface TrustedContactPortalView {
+  grant: {
+    expires_at: string;
+    status: TrustedContactGrantStatus;
+  };
+  contact: {
+    display_name: string;
+    relationship_label?: string | null;
+  };
+  owner: {
+    display_name: string;
+    callback_number?: string | null;
+  };
+  incident: {
+    id: string;
+    status: SosIncidentStatus;
+    incident_type?: string | null;
+    incident_level: SafetyIncidentLevel;
+    activated_at?: string | null;
+    created_at: string;
+  };
+  vehicle?: {
+    make?: string | null;
+    model?: string | null;
+    registration_number?: string | null;
+  } | null;
+  location?: {
+    latitude: number;
+    longitude: number;
+    accuracy_meters?: number | null;
+    captured_at: string;
+    expires_at: string;
+  } | null;
+  assistance?: {
+    state: string;
+    requested: boolean;
+    accepted: boolean;
+    arrived: boolean;
+  } | null;
+  latest_response?: TrustedContactResponseRecord | null;
+  permissions: {
+    incident_type: boolean;
+    vehicle_summary: boolean;
+    live_location: boolean;
+    assistance_status: boolean;
+    callback_number: boolean;
+  };
+  safety_truth: {
+    backend_acknowledged: boolean;
+    trusted_contact_delivery_confirmed: boolean;
+    assistance_requested: boolean;
+    assistance_accepted: boolean;
+    assistance_arrived: boolean;
+  };
+}
