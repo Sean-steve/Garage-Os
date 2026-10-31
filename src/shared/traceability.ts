@@ -817,7 +817,7 @@ export const SPRINT_22_TRACEABILITY_MATRIX: TraceabilityItem[] = [
     source: 'GAR-021/GAR-003/GAR-010/GAR-022/GAR-024/GAR-033/GAR-034/GAR-035/GAR-038/GAR-039/GAR-040/GAR-049',
     title: 'Automotive Marketplace Foundation',
     criticality: 'LAUNCH_CRITICAL',
-    status: 'IMPLEMENTED',
+    status: 'VERIFIED',
     implementation_refs: [
       'src/server/marketplace/types.ts',
       'src/server/marketplace/marketplaceRepository.ts',
