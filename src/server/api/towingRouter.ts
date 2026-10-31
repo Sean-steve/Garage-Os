@@ -9,6 +9,8 @@ import { towingService, TowActorContext } from '../towing/towingService';
 import { towingRepository } from '../towing/towingRepository';
 import { TowingCompatibilityEngine } from '../towing/compatibilityEngine';
 import { CanonicalAppError, ErrorCode } from '../../shared/errors';
+import { getDatabase } from '../database/connection';
+import { PlatformRole } from '../identity/types';
 import {
   AccountStatus,
   AuthenticatedActorContext,
@@ -43,17 +45,50 @@ export const towingRouter = Router();
 // Towing operations are safety-sensitive and always require a canonical session.
 towingRouter.use(authenticate());
 
+function isElevated(req: Request): boolean {
+  return Boolean(req.actor!.platform_roles?.some((role) =>
+    [PlatformRole.PLATFORM_ADMIN, PlatformRole.OPERATIONS, PlatformRole.TRUST_AND_SAFETY].includes(role)
+  ));
+}
+
+function actorProviderIds(req: Request): string[] {
+  const orgIds = req.actor!.memberships.filter((m) => m.status === MembershipStatus.ACTIVE).map((m) => m.organization_id);
+  if (orgIds.length === 0) return [];
+  const placeholders = orgIds.map(() => '?').join(',');
+  const rows = getDatabase().prepare(
+    `SELECT id FROM service_providers WHERE organization_id IN (${placeholders}) AND status = 'ACTIVE';`
+  ).all(...orgIds) as Array<{ id: string }>;
+  return rows.map((r) => r.id);
+}
+
 function getActor(req: Request): TowActorContext & { actor_id: string; roles: string[] } {
   const roles: string[] = [];
   if (req.actor!.active_membership?.role) roles.push(req.actor!.active_membership.role);
   if (req.actor!.platform_roles) roles.push(...req.actor!.platform_roles);
+
+  const providerIds = actorProviderIds(req);
+  const requestedProvider = req.headers['x-provider-id'] as string | undefined;
+  let providerId: string | undefined;
+  if (requestedProvider && providerIds.includes(requestedProvider)) {
+    providerId = requestedProvider;
+  } else if (providerIds.length === 1) {
+    providerId = providerIds[0];
+  } else if (requestedProvider && isElevated(req)) {
+    providerId = requestedProvider;
+  }
+
   return {
     id: req.actor!.user_id || req.actor!.id,
     actor_id: req.actor!.user_id || req.actor!.id,
     name: req.actor!.profile.display_name || req.actor!.email,
     roles,
-    provider_id: req.headers['x-provider-id'] as string | undefined,
+    provider_id: providerId,
   };
+}
+
+function assertProviderAccess(req: Request, providerId: string): void {
+  if (isElevated(req) || actorProviderIds(req).includes(providerId)) return;
+  throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Towing provider access denied', 403);
 }
 
 // -----------------------------------------------------------------------------
@@ -149,14 +184,18 @@ towingRouter.post('/towing/requests/from-roadside', async (req: Request, res: Re
  */
 towingRouter.get('/towing/requests', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const actor = getActor(req);
     const { vehicle_id, requesting_user_id, status, assigned_provider_id, organization_id } = req.query;
-
     const requests = towingRepository.listTowRequests({
       vehicle_id: vehicle_id as string | undefined,
-      requesting_user_id: requesting_user_id as string | undefined,
-      organization_id: organization_id as string | undefined,
+      requesting_user_id: isElevated(req)
+        ? (requesting_user_id as string | undefined)
+        : (actor.provider_id ? undefined : actor.id),
+      organization_id: isElevated(req) ? (organization_id as string | undefined) : undefined,
       status: status as TowRequestStatus | undefined,
-      assigned_provider_id: assigned_provider_id as string | undefined,
+      assigned_provider_id: isElevated(req)
+        ? (assigned_provider_id as string | undefined)
+        : actor.provider_id,
     });
 
     res.json({ success: true, data: requests });
@@ -277,7 +316,7 @@ towingRouter.post('/towing/offers/:id/accept', async (req: Request, res: Respons
     const actor = getActor(req);
     const { provider_id, operator_staff_id, operator_name, operator_phone } = req.body;
 
-    const resolvedProviderId = provider_id || actor.provider_id;
+    const resolvedProviderId = actor.provider_id || (isElevated(req) ? provider_id : undefined);
     if (!resolvedProviderId) {
       throw new CanonicalAppError(ErrorCode.VALIDATION_ERROR, 'provider_id is required to accept offer');
     }
@@ -308,7 +347,7 @@ towingRouter.post('/towing/offers/:id/decline', async (req: Request, res: Respon
     const actor = getActor(req);
     const { provider_id, reason } = req.body;
 
-    const resolvedProviderId = provider_id || actor.provider_id;
+    const resolvedProviderId = actor.provider_id || (isElevated(req) ? provider_id : undefined);
     if (!resolvedProviderId) {
       throw new CanonicalAppError(ErrorCode.VALIDATION_ERROR, 'provider_id is required to decline offer');
     }
@@ -612,7 +651,7 @@ towingRouter.post('/towing/recovery-units', async (req: Request, res: Response, 
       supported_classes,
     } = req.body;
 
-    const resolvedProviderId = provider_id || actor.provider_id;
+    const resolvedProviderId = actor.provider_id || (isElevated(req) ? provider_id : undefined);
     if (!resolvedProviderId || !unit_type || !registration_identifier) {
       throw new CanonicalAppError(
         ErrorCode.VALIDATION_ERROR,
@@ -643,6 +682,7 @@ towingRouter.post('/towing/recovery-units', async (req: Request, res: Response, 
  */
 towingRouter.get('/towing/providers/:providerId/recovery-units', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    assertProviderAccess(req, req.params.providerId);
     const units = towingService.listProviderRecoveryUnits(req.params.providerId);
     res.json({ success: true, data: units });
   } catch (err) {
