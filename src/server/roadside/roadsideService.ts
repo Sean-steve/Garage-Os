@@ -11,7 +11,7 @@ import { createCanonicalEventEnvelope } from '../events/envelope';
 import { roadsideRepository } from './roadsideRepository';
 import { vehicleRepository } from '../vehicle/vehicleRepository';
 import { getDatabase } from '../database/connection';
-import { haversineDistanceKm, isValidCoordinate } from '../providers/geoUtils';
+import { haversineDistanceKm, isPointInServiceArea, isValidCoordinate } from '../providers/geoUtils';
 import {
   RoadsideIncidentEntity,
   RoadsideLocationEntity,
@@ -488,7 +488,10 @@ export class RoadsideService {
 
     const incident = roadsideRepository.getIncidentById(incidentId);
     if (!incident) {
-      throw new CanonicalAppError(ErrorCode.ROADSIDE_INCIDENT_NOT_FOUND, `Incident ${incidentId} not found`);
+      throw new CanonicalAppError(
+        ErrorCode.ROADSIDE_INCIDENT_NOT_FOUND,
+        `Incident ${incidentId} not found`
+      );
     }
 
     if (
@@ -504,7 +507,10 @@ export class RoadsideService {
 
     const location = roadsideRepository.getActiveLocation(incidentId);
     if (!location) {
-      throw new CanonicalAppError(ErrorCode.ROADSIDE_LOCATION_REQUIRED, 'Incident does not have an active location');
+      throw new CanonicalAppError(
+        ErrorCode.ROADSIDE_LOCATION_REQUIRED,
+        'Incident does not have an active location'
+      );
     }
 
     const triage = roadsideRepository.getLatestTriageRecord(incidentId);
@@ -515,9 +521,8 @@ export class RoadsideService {
 
     const radiusKm = params?.search_radius_km || 35.0;
     const now = getCurrentUtcIsoString();
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 min expiry for response window
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
 
-    // Create Assistance Request
     const requestId = generateCanonicalId('rsr');
     const assistanceRequest: RoadsideAssistanceRequestEntity = {
       id: requestId,
@@ -529,84 +534,144 @@ export class RoadsideService {
       created_at: now,
       expires_at: expiresAt,
       fulfilled_assignment_id: null,
-      metadata_json: null,
+      metadata_json: JSON.stringify({
+        dispatch_truth: 'ETA_REQUIRES_ROUTING_OR_PROVIDER_CONFIRMATION',
+        pricing_truth: 'ONLY_PROVIDER_CONFIGURED_CALLOUT_IS_EXPOSED',
+      }),
     };
     roadsideRepository.createAssistanceRequest(assistanceRequest);
 
-    // Find verified providers in database to broadcast offer
     const db = getDatabase();
-    let eligibleProviders: any[] = [];
-
-    if (params?.preferred_provider_id) {
-      eligibleProviders = db
-        .prepare(`
-          SELECT sp.id, sp.name, sp.currency, sp.callout_fee, pl.latitude, pl.longitude
-          FROM service_providers sp
-          LEFT JOIN provider_locations pl ON pl.provider_id = sp.id
-          WHERE sp.id = ?
-        `)
-        .all(params.preferred_provider_id) as any[];
-    } else {
-      // Find providers with roadside or repair capabilities
-      eligibleProviders = db
-        .prepare(`
-          SELECT sp.id, sp.name, sp.currency, sp.callout_fee, pl.latitude, pl.longitude
-          FROM service_providers sp
-          LEFT JOIN provider_locations pl ON pl.provider_id = sp.id
-          WHERE sp.verification_status = 'VERIFIED' OR sp.status = 'ACTIVE'
-          LIMIT 20
-        `)
-        .all() as any[];
-
-      // Fallback: any provider if none explicitly verified
-      if (eligibleProviders.length === 0) {
-        eligibleProviders = db
-          .prepare(`
-            SELECT sp.id, sp.name, sp.currency, sp.callout_fee, pl.latitude, pl.longitude
-            FROM service_providers sp
-            LEFT JOIN provider_locations pl ON pl.provider_id = sp.id
-            LIMIT 10
-          `)
-          .all() as any[];
-      }
-    }
+    const preferredProviderId = params?.preferred_provider_id || null;
+    const eligibleProviders = db
+      .prepare(`
+        SELECT
+          sp.id,
+          sp.name,
+          sp.currency,
+          sp.callout_fee,
+          sp.service_radius_km,
+          (
+            SELECT pl.latitude
+            FROM provider_locations pl
+            WHERE pl.provider_id = sp.id
+            ORDER BY pl.is_primary DESC, pl.created_at ASC
+            LIMIT 1
+          ) AS latitude,
+          (
+            SELECT pl.longitude
+            FROM provider_locations pl
+            WHERE pl.provider_id = sp.id
+            ORDER BY pl.is_primary DESC, pl.created_at ASC
+            LIMIT 1
+          ) AS longitude
+        FROM service_providers sp
+        WHERE sp.status = 'ACTIVE'
+          AND sp.verification_status = 'VERIFIED'
+          AND sp.accepts_roadside_jobs = 1
+          AND (? IS NULL OR sp.id = ?)
+        ORDER BY sp.name ASC
+        LIMIT 20
+      `)
+      .all(preferredProviderId, preferredProviderId) as Array<{
+        id: string;
+        name: string;
+        currency: string | null;
+        callout_fee: number | null;
+        service_radius_km: number | null;
+        latitude: number | null;
+        longitude: number | null;
+      }>;
 
     const offers: RoadsideProviderOfferEntity[] = [];
 
     for (const provider of eligibleProviders) {
-      let distanceKm = 10.0;
-      if (provider.latitude && provider.longitude) {
-        distanceKm = haversineDistanceKm(location.latitude, location.longitude, provider.latitude, provider.longitude);
+      const serviceAreas = db
+        .prepare(`
+          SELECT area_type, center_lat, center_lng, radius_km, polygon_json
+          FROM provider_service_areas
+          WHERE provider_id = ? AND status = 'ACTIVE'
+        `)
+        .all(provider.id) as Array<{
+          area_type: string;
+          center_lat: number | null;
+          center_lng: number | null;
+          radius_km: number | null;
+          polygon_json: string | null;
+        }>;
+
+      let distanceKm: number | null = null;
+      if (provider.latitude != null && provider.longitude != null) {
+        distanceKm = haversineDistanceKm(
+          location.latitude,
+          location.longitude,
+          provider.latitude,
+          provider.longitude
+        );
       }
 
-      // If within radius or fallback
-      if (distanceKm <= radiusKm || eligibleProviders.length <= 2) {
-        const etaMinutes = Math.max(15, Math.round(distanceKm * 2.5) + 10);
-        const calloutFeeMinor = 350000; // 3,500 KES standard callout
+      const insideConfiguredArea =
+        serviceAreas.length > 0
+          ? serviceAreas.some((area) =>
+              isPointInServiceArea(
+                { latitude: location.latitude, longitude: location.longitude },
+                area
+              )
+            )
+          : null;
 
-        const offer: RoadsideProviderOfferEntity = {
-          id: generateCanonicalId('rpo'),
-          request_id: requestId,
-          incident_id: incidentId,
-          provider_id: provider.id,
-          provider_branch_id: null,
-          status: ProviderOfferStatus.OFFERED,
-          offered_at: now,
-          expires_at: expiresAt,
-          responded_at: null,
-          decline_reason: null,
-          estimated_arrival_minutes: etaMinutes,
-          callout_charge_minor: calloutFeeMinor,
-          currency: 'KES',
-          metadata_json: JSON.stringify({ distance_km: Number(distanceKm.toFixed(1)) }),
-        };
-
-        roadsideRepository.createProviderOffer(offer);
-        offers.push(offer);
+      if (insideConfiguredArea === false) {
+        continue;
       }
+
+      if (insideConfiguredArea === null) {
+        if (distanceKm == null) {
+          continue;
+        }
+        const providerRadius =
+          provider.service_radius_km != null && provider.service_radius_km > 0
+            ? Math.min(provider.service_radius_km, radiusKm)
+            : radiusKm;
+        if (distanceKm > providerRadius) {
+          continue;
+        }
+      }
+
+      const hasConfiguredCallout =
+        provider.callout_fee != null &&
+        Number.isFinite(provider.callout_fee) &&
+        provider.callout_fee >= 0;
+      const calloutFeeMinor = hasConfiguredCallout
+        ? Math.round(provider.callout_fee! * 100)
+        : 0;
+
+      const offer: RoadsideProviderOfferEntity = {
+        id: generateCanonicalId('rpo'),
+        request_id: requestId,
+        incident_id: incidentId,
+        provider_id: provider.id,
+        provider_branch_id: null,
+        status: ProviderOfferStatus.OFFERED,
+        offered_at: now,
+        expires_at: expiresAt,
+        responded_at: null,
+        decline_reason: null,
+        // Sprint 14 owns real route ETA. Straight-line distance is never converted into time.
+        estimated_arrival_minutes: null,
+        callout_charge_minor: calloutFeeMinor,
+        currency: provider.currency || 'KES',
+        metadata_json: JSON.stringify({
+          distance_km_geodesic: distanceKm == null ? null : Number(distanceKm.toFixed(1)),
+          distance_type: distanceKm == null ? 'UNKNOWN' : 'GEODESIC_DISTANCE',
+          eta_status: 'UNAVAILABLE_UNTIL_ROUTED_OR_PROVIDER_CONFIRMED',
+          pricing_status: hasConfiguredCallout ? 'PROVIDER_CONFIGURED_CALLOUT' : 'UNQUOTED',
+        }),
+      };
+
+      roadsideRepository.createProviderOffer(offer);
+      offers.push(offer);
     }
 
-    // Update Incident Status
     roadsideRepository.updateIncident(incidentId, {
       status: RoadsideIncidentStatus.REQUESTED,
       active_assistance_request_id: requestId,
@@ -620,8 +685,8 @@ export class RoadsideService {
       actor_id: actorId,
       actor_type: 'USER',
       actor_name: actorName,
-      title: 'Assistance requested and broadcast to network',
-      details: `Type: ${assistanceType}, Radius: ${radiusKm}km, Broadcasted to ${offers.length} provider(s)`,
+      title: 'Roadside assistance requested',
+      details: `Type: ${assistanceType}, Radius: ${radiusKm}km, Offered to ${offers.length} eligible provider(s); ETA remains unconfirmed until routed/provider-confirmed`,
       created_at: now,
     });
 
@@ -632,6 +697,7 @@ export class RoadsideService {
         subject_ids: {
           vehicle: incident.vehicle_id,
           incident: incidentId,
+          assistance_request: requestId,
         },
         actor_id: actorId,
         payload: {
@@ -639,6 +705,7 @@ export class RoadsideService {
           request_id: requestId,
           assistance_type: assistanceType,
           offers_count: offers.length,
+          eta_status: 'UNAVAILABLE_UNTIL_ROUTED_OR_PROVIDER_CONFIRMED',
         },
       })
     );
