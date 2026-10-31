@@ -571,12 +571,25 @@ export class TripGuardianService {
     if(journey.status!=='IN_PROGRESS'){
       throw new CanonicalAppError(ErrorCode.INVALID_STATE_TRANSITION,'SOS handoff is available only for an in-progress journey',409);
     }
+    const latestTripLocation=journey.location_sharing_enabled
+      ? tripGuardianRepository.getLatestLocation(journeyId)
+      : null;
+    const sosLocation=input.location||(
+      latestTripLocation&&latestTripLocation.sharing_authorized
+        ? {
+            latitude:latestTripLocation.latitude,
+            longitude:latestTripLocation.longitude,
+            accuracy_meters:latestTripLocation.accuracy_meters??undefined,
+            captured_at:latestTripLocation.captured_at,
+          }
+        : undefined
+    );
     const sos=sosService.initiate(actor,{
       vehicle_id:journey.vehicle_id,
       incident_type:'TRIP_GUARDIAN_USER_ESCALATION',
       incident_level:SafetyIncidentLevel.SERIOUS_EMERGENCY,
       activation_source:'MANUAL_SAFETY_ACTION',
-      location:input.location
+      location:sosLocation
     });
     const now=getCurrentUtcIsoString();
     tripGuardianRepository.createEscalationLink({
