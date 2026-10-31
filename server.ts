@@ -10,6 +10,7 @@
  */
 
 import express, { Request, Response } from 'express';
+import path from 'path';
 import { createServer as createViteServer } from 'vite';
 
 import { config, loadAndValidateConfig } from './src/server/config/env';
