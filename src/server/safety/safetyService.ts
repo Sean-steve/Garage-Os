@@ -130,6 +130,15 @@ export class SafetyService {
       );
     }
 
+    const activeContacts = safetyRepository.listContacts(actor.user_id);
+    if (activeContacts.length >= 10) {
+      throw new CanonicalAppError(
+        ErrorCode.BUSINESS_RULE_VIOLATION,
+        'Emergency Circle supports up to 10 active contacts',
+        409
+      );
+    }
+
     const now = getCurrentUtcIsoString();
     const contactId = generateCanonicalId('emc');
     const contact: Omit<EmergencyContact, 'scopes'> = {
@@ -170,7 +179,7 @@ export class SafetyService {
           subject_ids: { user: actor.user_id, emergency_contact: contactId },
           actor_id: actor.user_id,
           actor_type: actorType(actor),
-          provenance_class: DataProvenanceClass.OWNER_ENTERED,
+          provenance_class: DataProvenanceClass.OWNER_ASSERTED,
           payload: { contact_id: contactId, priority, verification_status: 'UNVERIFIED' },
         }),
         db
@@ -258,7 +267,7 @@ export class SafetyService {
           subject_ids: { user: actor.user_id, emergency_contact: contactId },
           actor_id: actor.user_id,
           actor_type: actorType(actor),
-          provenance_class: DataProvenanceClass.OWNER_ENTERED,
+          provenance_class: DataProvenanceClass.OWNER_ASSERTED,
           payload: { contact_id: contactId, priority },
         }),
         db
@@ -305,7 +314,7 @@ export class SafetyService {
           subject_ids: { user: actor.user_id, emergency_contact: contactId },
           actor_id: actor.user_id,
           actor_type: actorType(actor),
-          provenance_class: DataProvenanceClass.OWNER_ENTERED,
+          provenance_class: DataProvenanceClass.OWNER_ASSERTED,
           payload: { contact_id: contactId },
         }),
         db
@@ -330,7 +339,10 @@ export class SafetyService {
     contactId: string,
     input: UpdateContactScopeInput
   ): EmergencyContact {
-    this.requireContact(actor, contactId);
+    const contact = this.requireContact(actor, contactId);
+    if (contact.status !== EmergencyContactStatus.ACTIVE) {
+      throw new CanonicalAppError(ErrorCode.INVALID_STATE_TRANSITION, 'Revoked contacts cannot receive new sharing scopes', 409);
+    }
     if (!Object.values(SafetyIncidentLevel).includes(input.incident_level)) {
       throw new CanonicalAppError(ErrorCode.VALIDATION_ERROR, 'Invalid incident_level', 400);
     }
@@ -371,7 +383,7 @@ export class SafetyService {
           subject_ids: { user: actor.user_id, emergency_contact: contactId },
           actor_id: actor.user_id,
           actor_type: actorType(actor),
-          provenance_class: DataProvenanceClass.OWNER_ENTERED,
+          provenance_class: DataProvenanceClass.OWNER_ASSERTED,
           payload: {
             contact_id: contactId,
             incident_level: input.incident_level,
@@ -475,7 +487,7 @@ export class SafetyService {
           subject_ids: { user: actor.user_id },
           actor_id: actor.user_id,
           actor_type: actorType(actor),
-          provenance_class: DataProvenanceClass.OWNER_ENTERED,
+          provenance_class: DataProvenanceClass.OWNER_ASSERTED,
           payload: {
             emergency_circle_enabled: updated.emergency_circle_enabled,
             allow_location_sharing: updated.allow_location_sharing,
