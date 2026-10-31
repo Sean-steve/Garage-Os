@@ -153,7 +153,18 @@ export class MarketplacePaymentService{
     const order=marketplaceTransactionRepository.getOrder(orderId);
     if(!order)throw new CanonicalAppError(ErrorCode.NOT_FOUND_OR_NOT_ACCESSIBLE,'Order not found',404);
     const platformFinance=this.hasFinanceRole(actor);
-    if(order.buyer_user_id!==actor.user_id&&!platformFinance)throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED,'Only the buyer or platform finance may request a refund',403);
+    const isBuyer=order.buyer_user_id===actor.user_id;
+    if(!isBuyer&&!platformFinance){
+      const store=getDatabase().prepare('SELECT organization_id FROM marketplace_stores WHERE id=?').get(order.store_id) as any;
+      if(!store)throw new CanonicalAppError(ErrorCode.NOT_FOUND_OR_NOT_ACCESSIBLE,'Marketplace store not found',404);
+      assertAuthorized(actor,CanonicalPermission.MARKETPLACE_ORDERS_MANAGE,{organizationId:String(store.organization_id)});
+    }
+    if(isBuyer){
+      const fulfillment=getDatabase().prepare('SELECT status FROM marketplace_fulfillments WHERE order_id=? LIMIT 1').get(order.id) as any;
+      if(fulfillment){
+        throw new CanonicalAppError(ErrorCode.INVALID_STATE_TRANSITION,'Once physical fulfillment has started, buyer refunds must use the return workflow',409);
+      }
+    }
     const key=idempotency(idempotencyKey);
     const existing=repo.getRefundByIdempotency(order.id,key);
     if(existing)return {refund:existing,provider_action_required:existing.status==='REQUESTED'};
@@ -274,6 +285,45 @@ export class MarketplacePaymentService{
           "SELECT COALESCE(SUM(amount_minor),0) total FROM marketplace_refunds WHERE payment_intent_id=? AND status='SUCCEEDED'"
         ).get(intent.id) as any)?.total||0);
         repo.updateIntent({...bound,status:refundTotal>=intent.amount_minor?'REFUNDED':'PARTIALLY_REFUNDED'});
+
+        const linkedReturn=getDatabase().prepare(
+          "SELECT id,fulfillment_id,order_id,store_id FROM marketplace_returns WHERE refund_id=? AND status='REFUND_REQUESTED' LIMIT 1"
+        ).get(refund.id) as any;
+        if(linkedReturn){
+          getDatabase().prepare(
+            "UPDATE marketplace_returns SET status='COMPLETED',completed_at=?,updated_at=? WHERE id=?"
+          ).run(now,now,String(linkedReturn.id));
+          const orderUnits=Number((getDatabase().prepare(
+            'SELECT COALESCE(SUM(quantity),0) total FROM marketplace_order_items WHERE order_id=?'
+          ).get(String(linkedReturn.order_id)) as any)?.total||0);
+          const returnedUnits=Number((getDatabase().prepare(`
+            SELECT COALESCE(SUM(ri.received_quantity),0) total
+            FROM marketplace_return_items ri
+            JOIN marketplace_returns r ON r.id=ri.return_id
+            WHERE r.order_id=? AND r.status='COMPLETED'
+          `).get(String(linkedReturn.order_id)) as any)?.total||0);
+          const fulfillmentStatus=orderUnits>0&&returnedUnits>=orderUnits?'RETURNED':'COMPLETED';
+          getDatabase().prepare(
+            'UPDATE marketplace_fulfillments SET status=?,updated_at=? WHERE id=?'
+          ).run(fulfillmentStatus,now,String(linkedReturn.fulfillment_id));
+          getDatabase().prepare(`
+            INSERT INTO marketplace_fulfillment_events
+            (id,fulfillment_id,order_id,event_type,source_type,actor_id,details_json,occurred_at)
+            VALUES (?,?,?,?,?,?,?,?)
+          `).run(generateCanonicalId('mfevt'),String(linkedReturn.fulfillment_id),String(linkedReturn.order_id),
+            'RETURN_REFUND_CONFIRMED','SYSTEM_DERIVED','payment-provider:'+provider.provider_key,
+            JSON.stringify({return_id:String(linkedReturn.id),refund_id:refund.id,amount_minor:refund.amount_minor,
+              fulfillment_status:fulfillmentStatus}),now);
+          enqueueOutboxEvent(createCanonicalEventEnvelope({
+            type:'marketplace.return.completed',producer:'garage-os-marketplace-payments',correlation_id:String(linkedReturn.id),
+            subject_ids:{marketplace_order:String(linkedReturn.order_id),marketplace_store:String(linkedReturn.store_id),
+              marketplace_return:String(linkedReturn.id),marketplace_refund:refund.id},
+            actor_id:'payment-provider:'+provider.provider_key,actor_type:CanonicalActorType.SYSTEM_WORKER,
+            provenance_class:DataProvenanceClass.EXTERNALLY_VERIFIED,
+            payload:{return_id:String(linkedReturn.id),refund_id:refund.id,refund_confirmed:true,
+              fulfillment_status:fulfillmentStatus}
+          }),db);
+        }
       }else{
         processedMessage='Event type ignored';
       }
