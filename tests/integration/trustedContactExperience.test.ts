@@ -188,6 +188,36 @@ describe('Trusted Contact Experience (GAR-017)', () => {
     assert.equal(Number(rawLeak.count), 0);
   });
 
+  it('revokes an unused portal grant when the notification transport is not configured', async () => {
+    setSafetyNotificationAdapter(null);
+    addContact();
+
+    const aggregate = sosService.initiate(owner, {
+      incident_type: 'TRANSPORT_NOT_CONFIGURED',
+      incident_level: SafetyIncidentLevel.SERIOUS_EMERGENCY,
+    });
+    sosService.finalizeActivation(
+      aggregate.incident.id,
+      new Date(new Date(aggregate.incident.cancel_deadline_at).getTime() + 1000).toISOString()
+    );
+
+    const attempt = sosRepository.listNotificationAttempts(aggregate.incident.id)[0];
+    assert.ok(attempt);
+
+    const processed = await sosService.processNotificationAttempt(attempt.id);
+    assert.equal(processed?.status, SosNotificationStatus.NOT_CONFIGURED);
+
+    const grant = trustedContactRepository.getGrantByNotificationAttempt(attempt.id);
+    assert.ok(grant);
+    assert.equal(grant!.status, TrustedContactGrantStatus.REVOKED);
+
+    const revokeEvent = db.prepare(
+      "SELECT payload FROM outbox_events WHERE type = 'safety.trusted_contact.access_grant.revoked' ORDER BY created_at DESC LIMIT 1"
+    ).get() as any;
+    assert.ok(revokeEvent);
+    assert.equal(JSON.parse(revokeEvent.payload).reason, 'NOTIFICATION_NOT_CONFIGURED');
+  });
+
   it('projects only the authorized incident, vehicle, location, callback and assistance fields', async () => {
     const { token } = await activateAndNotify();
 
