@@ -138,6 +138,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertProviderAccess(actor, req.body.provider_id);
       assertAuthorized(actor, CanonicalPermission.SERVICE_CASE_CREATE);
       const dto: CreateServiceCaseDto = req.body;
       const result = garageOperationsService.createServiceCase(actor, dto);
@@ -153,9 +154,21 @@ operationsRouter.get(
   '/operations/service-cases',
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const actor = getActor(req);
       const { provider_id, branch_id, vehicle_id, status } = req.query;
+      const providerId = provider_id ? String(provider_id) : undefined;
+      if (!isPrivilegedOperationsActor(actor)) {
+        if (!providerId) {
+          throw new CanonicalAppError(
+            ErrorCode.VALIDATION_ERROR,
+            'provider_id is required for provider-scoped workshop listing',
+            400
+          );
+        }
+        assertProviderAccess(actor, providerId);
+      }
       const list = garageOperationsService.listServiceCases({
-        provider_id: provider_id ? String(provider_id) : undefined,
+        provider_id: providerId,
         branch_id: branch_id ? String(branch_id) : undefined,
         vehicle_id: vehicle_id ? String(vehicle_id) : undefined,
         status: status ? String(status) : undefined,
@@ -172,6 +185,8 @@ operationsRouter.get(
   '/operations/service-cases/:id',
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const actor = getActor(req);
+      assertServiceCaseProviderAccess(actor, req.params.id);
       const aggregate = garageOperationsService.getServiceCaseAggregate(req.params.id);
       if (!aggregate) {
         throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, 'Service Case not found', 404);
@@ -189,6 +204,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertServiceCaseProviderAccess(actor, req.params.id);
       assertAuthorized(actor, CanonicalPermission.SERVICE_CASE_CHECK_IN);
       const dto: PerformCheckInDto = {
         ...req.body,
@@ -208,6 +224,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertServiceCaseProviderAccess(actor, req.params.id);
       const concern = garageOperationsService.addCustomerConcern(actor, req.params.id, req.body);
       res.status(201).json({ success: true, data: concern });
     } catch (err) {
@@ -250,6 +267,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertServiceCaseProviderAccess(actor, req.body.service_case_id);
       assertAuthorized(actor, CanonicalPermission.INSPECTION_PERFORM);
       const dto: CreateInspectionDto = req.body;
       const inspection = garageOperationsService.startInspection(actor, dto);
@@ -266,6 +284,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertInspectionProviderAccess(actor, req.params.id);
       assertAuthorized(actor, CanonicalPermission.INSPECTION_PERFORM);
       const dto: RecordInspectionResultsDto = {
         ...req.body,
@@ -287,6 +306,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertServiceCaseProviderAccess(actor, req.params.id);
       assertAuthorized(actor, CanonicalPermission.RECOMMENDATION_CREATE);
       const dto: RecommendWorkItemDto = {
         ...req.body,
@@ -306,6 +326,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertServiceCaseProviderAccess(actor, req.params.id);
       assertAuthorized(actor, CanonicalPermission.SERVICE_AUTHORIZATION_MANAGE);
       const dto: AuthorizeServiceDto = {
         ...req.body,
@@ -327,6 +348,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertServiceCaseProviderAccess(actor, req.body.service_case_id);
       assertAuthorized(actor, CanonicalPermission.WORK_ORDER_MANAGE);
       const dto: CreateWorkOrderDto = req.body;
       const workOrder = garageOperationsService.createWorkOrder(actor, dto);
@@ -342,9 +364,21 @@ operationsRouter.get(
   '/operations/work-orders',
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const actor = getActor(req);
       const { provider_id, status } = req.query;
+      const providerId = provider_id ? String(provider_id) : undefined;
+      if (!isPrivilegedOperationsActor(actor)) {
+        if (!providerId) {
+          throw new CanonicalAppError(
+            ErrorCode.VALIDATION_ERROR,
+            'provider_id is required for provider-scoped work-order listing',
+            400
+          );
+        }
+        assertProviderAccess(actor, providerId);
+      }
       const list = garageOperationsService.listWorkOrders({
-        provider_id: provider_id ? String(provider_id) : undefined,
+        provider_id: providerId,
         status: status ? String(status) : undefined,
       });
       res.json({ success: true, count: list.length, data: list });
@@ -359,6 +393,8 @@ operationsRouter.get(
   '/operations/work-orders/:id',
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const actor = getActor(req);
+      assertWorkOrderProviderAccess(actor, req.params.id);
       const order = garageOperationsService.getWorkOrderAggregate(req.params.id);
       if (!order) {
         throw new CanonicalAppError(ErrorCode.RESOURCE_NOT_FOUND, 'Work Order not found', 404);
@@ -546,6 +582,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertServiceCaseProviderAccess(actor, req.params.id);
       assertAuthorized(actor, CanonicalPermission.VEHICLE_RELEASE_PERFORM);
       const dto: ReleaseVehicleDto = {
         ...req.body,
@@ -565,6 +602,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertServiceCaseProviderAccess(actor, req.params.id);
       const { content, visibility } = req.body;
       const note = garageOperationsService.addNote(actor, req.params.id, content, visibility);
       res.status(201).json({ success: true, data: note });
@@ -580,6 +618,7 @@ operationsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actor = getActor(req);
+      assertServiceCaseProviderAccess(actor, req.params.id);
       const { reason } = req.body;
       garageOperationsService.cancelServiceCase(actor, req.params.id, reason || 'Cancelled by user');
       res.json({ success: true, message: 'Service case cancelled' });
