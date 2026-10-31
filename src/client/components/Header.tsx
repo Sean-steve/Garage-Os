@@ -9,6 +9,7 @@ interface HeaderProps {
   userName?: string;
   userRole?: string;
   showAdminTools?: boolean;
+  showProviderTools?: boolean;
   onLogout?: () => void;
   uptimePercent?: string;
 }
@@ -20,6 +21,7 @@ export const Header: React.FC<HeaderProps> = ({
   userName = 'Garage OS User',
   userRole = 'Authenticated',
   showAdminTools = false,
+  showProviderTools = false,
   onLogout,
 }) => {
   const allNavItems: Array<{ id: ActiveTab; label: string; icon: React.ComponentType<{ className?: string }>; admin?: boolean }> = [
@@ -28,6 +30,7 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'maintenance', label: 'Maintenance', icon: Wrench },
     { id: 'issues', label: 'Issues', icon: AlertTriangle },
     { id: 'bookings', label: 'Service', icon: CalendarDays },
+    { id: 'workshop', label: 'Workshop', icon: Wrench, provider: true } as any,
     { id: 'mobility', label: 'Mobility', icon: Navigation },
     { id: 'timeline', label: 'Timeline', icon: Clock },
     { id: 'passport', label: 'Passport', icon: FileCheck },
@@ -36,7 +39,9 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'audit', label: 'Audit', icon: ShieldCheck, admin: true },
     { id: 'traceability', label: 'Traceability', icon: ListTree, admin: true },
   ];
-  const navItems = allNavItems.filter((item) => !item.admin || showAdminTools);
+  const navItems = allNavItems.filter((item: any) =>
+    (!item.admin || showAdminTools) && (!item.provider || showProviderTools)
+  );
 
   return (
     <header className="flex justify-between items-center mb-8 flex-wrap gap-4">
