@@ -32,67 +32,16 @@ import {
 export const roadsideRouter = Router();
 
 // Middleware: Authenticate actor context
-roadsideRouter.use(authenticate({ optional: true }));
+roadsideRouter.use(authenticate());
 
 function getActor(req: Request): AuthenticatedActorContext & { actor_id: string; roles: string[] } {
-  if (req.actor) {
-    const roles: string[] = [];
-    if (req.actor.active_membership?.role) {
-      roles.push(req.actor.active_membership.role);
-    }
-    if (req.actor.platform_roles) {
-      roles.push(...req.actor.platform_roles);
-    }
-    return {
-      ...req.actor,
-      actor_id: req.actor.user_id || req.actor.id,
-      roles,
-    };
-  }
-
-  // Fallback dev context
+  const roles: string[] = [];
+  if (req.actor!.active_membership?.role) roles.push(req.actor!.active_membership.role);
+  if (req.actor!.platform_roles) roles.push(...req.actor!.platform_roles);
   return {
-    id: 'usr_dev_driver_01',
-    user_id: 'usr_dev_driver_01',
-    actor_id: 'usr_dev_driver_01',
-    session_id: 'sess_dev_driver_01',
-    email: 'driver@garage-os.local',
-    account_status: AccountStatus.ACTIVE,
-    platform_roles: [],
-    profile: {
-      user_id: 'usr_dev_driver_01',
-      display_name: 'Dev Stranded Driver',
-      first_name: 'Dev',
-      last_name: 'Driver',
-      preferred_language: 'en',
-      timezone: 'Africa/Nairobi',
-      country: 'KE',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    memberships: [
-      {
-        membership_id: 'mem_dev_driver_01',
-        organization_id: 'org_dev_driver_01',
-        organization_name: 'Driver Fleet',
-        organization_type: OrganizationType.GARAGE,
-        organization_status: OrganizationStatus.ACTIVE,
-        role: MembershipRole.OWNER,
-        status: MembershipStatus.ACTIVE,
-      },
-    ],
-    active_organization_id: 'org_dev_driver_01',
-    active_membership: {
-      membership_id: 'mem_dev_driver_01',
-      organization_id: 'org_dev_driver_01',
-      organization_name: 'Driver Fleet',
-      organization_type: OrganizationType.GARAGE,
-      organization_status: OrganizationStatus.ACTIVE,
-      role: MembershipRole.OWNER,
-      status: MembershipStatus.ACTIVE,
-      permissions: [],
-    },
-    roles: [MembershipRole.OWNER],
+    ...req.actor!,
+    actor_id: req.actor!.user_id || req.actor!.id,
+    roles,
   };
 }
 
