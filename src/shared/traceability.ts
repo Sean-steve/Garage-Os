@@ -751,3 +751,58 @@ export const SPRINT_20_TRACEABILITY_MATRIX: TraceabilityItem[] = [
     notes: 'Personalization is deterministic and explainable. It uses only recorded vehicle evidence and owner-configured context; no precise-location inference or AI inference is used. Recommendations never mutate canonical maintenance schedules or diagnose faults.',
   },
 ];
+
+
+/**
+ * Sprint 21 — Pre-Trip & Trip Guardian Foundation (GAR-019).
+ */
+export const SPRINT_21_TRACEABILITY_MATRIX: TraceabilityItem[] = [
+  {
+    requirement_id: 'GAR-DEV-S21',
+    source: 'GAR-019/GAR-004/GAR-006/GAR-008/GAR-017/GAR-020/GAR-035/GAR-039/GAR-040/GAR-049',
+    title: 'Pre-Trip & Trip Guardian Foundation',
+    criticality: 'LAUNCH_CRITICAL',
+    status: 'VERIFIED',
+    implementation_refs: [
+      'src/server/tripGuardian/types.ts',
+      'src/server/tripGuardian/tripGuardianRepository.ts',
+      'src/server/tripGuardian/tripGuardianService.ts',
+      'src/server/api/tripGuardianRouter.ts',
+      'src/server/jobs/tripGuardianJob.ts',
+      'src/client/components/BentoTripGuardian.tsx',
+      'src/server/carCare/carCareService.ts',
+    ],
+    schema_refs: [
+      'trip_guardian_journeys',
+      'trip_guardian_contact_shares',
+      'trip_guardian_checkins',
+      'trip_guardian_location_snapshots',
+      'trip_guardian_escalation_links',
+      'trip_guardian_status_history',
+    ],
+    api_event_refs: [
+      'GET/POST /api/v1/trip-guardian/journeys',
+      'GET/PATCH /api/v1/trip-guardian/journeys/:id',
+      'GET /api/v1/trip-guardian/journeys/:id/readiness',
+      'POST /api/v1/trip-guardian/journeys/:id/start',
+      'POST /api/v1/trip-guardian/journeys/:id/arrive',
+      'POST /api/v1/trip-guardian/journeys/:id/cancel',
+      'POST /api/v1/trip-guardian/journeys/:id/location',
+      'POST /api/v1/trip-guardian/journeys/:id/checkins/:checkinId/respond',
+      'POST /api/v1/trip-guardian/journeys/:id/escalate/sos',
+      'trip_guardian.journey.prepared',
+      'trip_guardian.journey.started',
+      'trip_guardian.journey.arrived',
+      'trip_guardian.journey.cancelled',
+      'trip_guardian.checkin.prompt_due',
+      'trip_guardian.checkin.responded',
+      'trip_guardian.checkin.missed',
+      'trip_guardian.location.snapshot_recorded',
+      'trip_guardian.sos_handoff.created',
+    ],
+    ui_refs: ['src/client/components/BentoTripGuardian.tsx'],
+    test_refs: ['tests/integration/tripGuardianFoundation.test.ts'],
+    ops_refs: ['audit_events', 'outbox_events', 'job_instances'],
+    notes: 'Trip Guardian foundation owns journey state, journey-specific sharing consent and check-ins. It reuses Car Care pre-trip missions and SOS truth. No crash detection, injury inference, automatic emergency escalation or continuous live tracking is claimed.',
+  },
+];

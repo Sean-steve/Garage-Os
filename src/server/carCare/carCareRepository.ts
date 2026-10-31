@@ -74,6 +74,14 @@ export class CarCareRepository {
     return Number(r.changes||0)===1;
   }
 
+  cancelMission(id:string,userId:string,vehicleId:string,now:string):boolean{
+    const r=getDatabase().prepare(`
+      UPDATE vehicle_care_missions SET status='CANCELLED',cancelled_at=?,updated_at=?
+      WHERE id=? AND user_id=? AND vehicle_id=? AND status='ACTIVE'
+    `).run(now,now,id,userId,vehicleId);
+    return Number(r.changes||0)===1;
+  }
+
   getCareProfile(userId:string,vehicleId:string):VehicleCareProfile|null{
     const row=getDatabase().prepare(
       'SELECT * FROM vehicle_care_profiles WHERE user_id=? AND vehicle_id=? LIMIT 1'

@@ -467,6 +467,39 @@ export class CarCareService {
     return this.enrichMission(mission);
   }
 
+  cancelMission(
+    actor:AuthenticatedActorContext,
+    vehicleId:string,
+    missionId:string,
+    reason='ABANDONED_BY_OWNING_WORKFLOW'
+  ):EnrichedVehicleCareMission{
+    vehicleService.getVehicleDetails(actor,vehicleId);
+    const mission=carCareRepository.getMission(actor.user_id,vehicleId,missionId);
+    if(!mission) throw new CanonicalAppError(ErrorCode.NOT_FOUND_OR_NOT_ACCESSIBLE,'Care mission not found',404);
+    if(mission.status==='COMPLETED'||mission.status==='CANCELLED') return this.enrichMission(mission);
+
+    const now=getCurrentUtcIsoString();
+    carCareRepository.cancelMission(missionId,actor.user_id,vehicleId,now);
+    const updated=carCareRepository.getMission(actor.user_id,vehicleId,missionId)!;
+
+    withTransaction(({db})=>{
+      enqueueOutboxEvent(createCanonicalEventEnvelope({
+        type:'car_care.mission.cancelled',producer:'garage-os-car-care',correlation_id:missionId,
+        subject_ids:{vehicle:vehicleId,mission:missionId},
+        actor_id:actor.user_id,actor_type:actor.type||CanonicalActorType.VEHICLE_OWNER,
+        provenance_class:DataProvenanceClass.OWNER_ASSERTED,
+        payload:{vehicle_id:vehicleId,mission_id:missionId,reason}
+      }),db);
+      recordAuditEvent({
+        actor_id:actor.user_id,actor_type:actor.type||CanonicalActorType.VEHICLE_OWNER,
+        action:'CAR_CARE_MISSION_CANCELLED',resource_type:'vehicle_care_mission',resource_id:missionId,
+        correlation_id:missionId,source:'CAR_CARE_SERVICE',metadata:{vehicle_id:vehicleId,reason}
+      },db);
+    });
+
+    return this.enrichMission(updated);
+  }
+
   private enrichMission(mission:VehicleCareMission):EnrichedVehicleCareMission{
     const template=carCareRepository.getTemplateById(mission.template_id);
     if(!template) throw new CanonicalAppError(ErrorCode.NOT_FOUND_OR_NOT_ACCESSIBLE,'Care mission template unavailable',404);
