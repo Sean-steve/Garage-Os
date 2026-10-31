@@ -125,6 +125,7 @@ bookingRouter.get('/offerings/:id', (req: Request, res: Response, next: NextFunc
 bookingRouter.post('/offerings', (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertProviderAccess(actor, req.body.provider_id);
     const offering = bookingService.createOffering(
       { actor_id: actor.actor_id, roles: actor.roles, name: `${actor.profile?.display_name || 'Provider'}` },
       req.body
@@ -185,9 +186,11 @@ bookingRouter.post('/capacity/holds', (req: Request, res: Response, next: NextFu
 bookingRouter.post('/bookings', (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    vehiclePolicy.assertVehicleAccess(actor, req.body.vehicle_id, CanonicalPermission.VEHICLE_READ);
+    const bookingInput = { ...req.body, customer_user_id: actor.id };
     const booking = bookingService.createBooking(
       { actor_id: actor.actor_id, roles: actor.roles, name: `${actor.profile?.display_name || 'Customer'}` },
-      req.body
+      bookingInput
     );
     res.status(201).json({ success: true, data: booking });
   } catch (err) {
@@ -197,10 +200,19 @@ bookingRouter.post('/bookings', (req: Request, res: Response, next: NextFunction
 
 bookingRouter.get('/bookings', (req: Request, res: Response, next: NextFunction) => {
   try {
+    const actor = getActor(req);
+    const requestedProviderId = req.query.provider_id as string | undefined;
+    const providerScoped = requestedProviderId ? canAccessProvider(actor, requestedProviderId) : false;
     const filters = {
-      customer_user_id: req.query.customer_user_id as string | undefined,
-      provider_id: req.query.provider_id as string | undefined,
-      branch_id: req.query.branch_id as string | undefined,
+      customer_user_id: isPrivilegedBookingActor(actor) || providerScoped
+        ? (req.query.customer_user_id as string | undefined)
+        : actor.id,
+      provider_id: isPrivilegedBookingActor(actor) || providerScoped
+        ? requestedProviderId
+        : undefined,
+      branch_id: isPrivilegedBookingActor(actor) || providerScoped
+        ? (req.query.branch_id as string | undefined)
+        : undefined,
       vehicle_id: req.query.vehicle_id as string | undefined,
       status: req.query.status as BookingStatus | undefined,
     };
@@ -213,6 +225,8 @@ bookingRouter.get('/bookings', (req: Request, res: Response, next: NextFunction)
 
 bookingRouter.get('/bookings/:id', (req: Request, res: Response, next: NextFunction) => {
   try {
+    const actor = getActor(req);
+    assertBookingReadAccess(actor, req.params.id);
     const booking = bookingService.getBooking(req.params.id);
     res.json({ success: true, data: booking });
   } catch (err) {
