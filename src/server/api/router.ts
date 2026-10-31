@@ -39,6 +39,7 @@ import { roadsideRouter } from './roadsideRouter';
 import { towingRouter } from './towingRouter';
 import { dispatchRouter } from '../dispatch/dispatchRouter';
 import { safetyRouter } from './safetyRouter';
+import { trustedContactRouter } from './trustedContactRouter';
 
 export const apiV1Router = Router();
 
@@ -95,7 +96,10 @@ apiV1Router.use(towingRouter);
 // Mount Sprint 14 Real-Time Dispatch, Location & Provider Matching Router (GAR-016)
 apiV1Router.use('/dispatch', dispatchRouter);
 
-// Mount Sprint 15 Emergency Circle & Human Safety Foundation Router (GAR-017)
+// Mount Sprint 17 public Trusted Contact Experience BEFORE the authenticated safety router.
+apiV1Router.use('/safety/trusted-contact', trustedContactRouter);
+
+// Mount Sprint 15-17 Emergency Circle, SOS & Human Safety Router (GAR-017)
 apiV1Router.use('/safety', safetyRouter);
 
 // 1. Platform Capabilities (GAR-002 §8 /v1/platform/capabilities)
