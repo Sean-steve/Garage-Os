@@ -97,7 +97,7 @@ export class FitmentService {
       enqueueOutboxEvent(createCanonicalEventEnvelope({
         type:'marketplace.fitment.source.created',producer:'garage-os-fitment',correlation_id:source.id,
         subject_ids:{fitment_source:source.id},actor_id:actor.user_id,actor_type:actorType(actor),
-        provenance_class:DataProvenanceClass.SYSTEM_DERIVED,
+        provenance_class:DataProvenanceClass.DERIVED_DETERMINISTIC,
         payload:{source_id:source.id,source_type:source.source_type,verification_authority:source.verification_authority,trust_rank:source.trust_rank}
       }),db);
       recordAuditEvent({
@@ -324,7 +324,7 @@ export class FitmentService {
         enqueueOutboxEvent(createCanonicalEventEnvelope({
           type:'marketplace.fitment.evaluated',producer:'garage-os-fitment',correlation_id:decision.id!,
           subject_ids:{vehicle:vehicle.id,marketplace_product:productId,...(listingId?{marketplace_listing:listingId}:{})},
-          actor_type:CanonicalActorType.SYSTEM,provenance_class:DataProvenanceClass.SYSTEM_DERIVED,
+          actor_type:CanonicalActorType.SYSTEM_WORKER,provenance_class:DataProvenanceClass.DERIVED_DETERMINISTIC,
           payload:{decision_id:decision.id,vehicle_id:vehicle.id,product_id:productId,status,confidence,guaranteed:false}
         }),db);
       });
@@ -393,7 +393,7 @@ export class FitmentService {
         type:'marketplace.fitment.rule.created',producer:'garage-os-fitment',correlation_id:created.id,
         subject_ids:{organization:organizationId,marketplace_product:created.product_id,fitment_rule:created.id},
         actor_id:actor.user_id,actor_type:actorType(actor),
-        provenance_class:created.source_type==='SELLER'?DataProvenanceClass.OWNER_ASSERTED:DataProvenanceClass.SYSTEM_DERIVED,
+        provenance_class:created.source_type==='SELLER'?DataProvenanceClass.OWNER_ASSERTED:DataProvenanceClass.DERIVED_DETERMINISTIC,
         payload:{
           rule_id:created.id,product_id:created.product_id,source_type:created.source_type,
           rule_kind:created.rule_kind,verification_status:created.verification_status,guaranteed:false
