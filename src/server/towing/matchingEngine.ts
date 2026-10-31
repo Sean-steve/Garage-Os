@@ -21,9 +21,9 @@ export interface MatchedTowCandidate {
   recovery_unit_id: string;
   unit_registration: string;
   unit_type: string;
-  distance_km: number;
+  distance_km: number | null;
   compatibility: VehicleCompatibilityEvaluation;
-  estimated_price_minor: number;
+  estimated_price_minor: number | null;
   currency: string;
 }
 
@@ -49,7 +49,7 @@ export class TowingMatchingEngine {
     const providers = db
       .prepare(`
         SELECT p.id, p.name, p.provider_type, p.status, p.verification_status,
-               l.latitude, l.longitude
+               p.currency, l.latitude, l.longitude
         FROM service_providers p
         LEFT JOIN provider_locations l ON p.primary_location_id = l.id
         WHERE p.status = 'ACTIVE'
@@ -64,6 +64,7 @@ export class TowingMatchingEngine {
         provider_type: string;
         status: string;
         verification_status: string;
+        currency: string | null;
         latitude: number | null;
         longitude: number | null;
       }>;
@@ -71,8 +72,9 @@ export class TowingMatchingEngine {
     const candidates: MatchedTowCandidate[] = [];
 
     for (const provider of providers) {
-      // Calculate distance if provider location is known, otherwise default reasonable distance
-      let dist = 8.5; // fallback
+      // Static Sprint 13 matching may use geodesic distance for eligibility/ranking,
+      // but it must never invent a distance when provider location is unknown.
+      let dist: number | null = null;
       if (provider.latitude != null && provider.longitude != null) {
         dist = haversineDistanceKm(
           criteria.pickup_latitude,
@@ -80,8 +82,11 @@ export class TowingMatchingEngine {
           provider.latitude,
           provider.longitude
         );
-        if (dist > radius && (!criteria.preferred_provider_id || criteria.preferred_provider_id !== provider.id)) {
-          continue; // Out of service radius
+        if (
+          dist > radius &&
+          (!criteria.preferred_provider_id || criteria.preferred_provider_id !== provider.id)
+        ) {
+          continue;
         }
       }
 
@@ -112,11 +117,7 @@ export class TowingMatchingEngine {
       }
 
       if (bestEvaluation) {
-        // Base flatbed / recovery fee + km distance rate
-        const baseRateMinor = 450000; // 4,500 KES in minor units (cents)
-        const perKmMinor = 15000; // 150 KES per km
-        const roundedDist = Math.round(dist * 10) / 10;
-        const estimatedPriceMinor = Math.round(baseRateMinor + roundedDist * perKmMinor);
+        const roundedDist = dist == null ? null : Math.round(dist * 10) / 10;
 
         candidates.push({
           provider_id: provider.id,
@@ -126,8 +127,10 @@ export class TowingMatchingEngine {
           unit_type: bestEvaluation.unit.unit_type,
           distance_km: roundedDist,
           compatibility: bestEvaluation.eval,
-          estimated_price_minor: estimatedPriceMinor,
-          currency: 'KES',
+          // Exact tow pricing requires an explicit provider quote/rate model and,
+          // for mileage pricing, road distance. Haversine distance never creates a charge.
+          estimated_price_minor: null,
+          currency: provider.currency || 'KES',
         });
       }
     }
@@ -144,6 +147,8 @@ export class TowingMatchingEngine {
       if (b.compatibility.status === TowCompatibilityStatus.CONFIRMED && a.compatibility.status !== TowCompatibilityStatus.CONFIRMED) {
         return 1;
       }
+      if (a.distance_km == null) return 1;
+      if (b.distance_km == null) return -1;
       return a.distance_km - b.distance_km;
     });
 
