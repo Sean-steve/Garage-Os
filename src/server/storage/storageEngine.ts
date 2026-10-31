@@ -14,6 +14,7 @@ import { getCurrentUtcIsoString } from '../domain/time';
 import { CanonicalAppError, ErrorCode } from '../../shared/errors';
 import { DataClassificationLevel } from '../../shared/classification';
 import { logger } from '../observability/logger';
+import { config } from '../config/env';
 
 export interface UploadFileInput {
   filename: string;
@@ -71,7 +72,7 @@ class MemoryStorageDriver implements StorageDriver {
 
 class StorageEngine {
   private driver: StorageDriver;
-  private tokenSecret = crypto.randomBytes(32).toString('hex');
+  private tokenSecret = config.FILE_SIGNING_SECRET || config.JWT_SECRET;
 
   constructor(driver?: StorageDriver) {
     this.driver = driver || new MemoryStorageDriver();
