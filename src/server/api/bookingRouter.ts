@@ -365,11 +365,20 @@ bookingRouter.post('/quotes', (req: Request, res: Response, next: NextFunction) 
 
 bookingRouter.get('/quotes', (req: Request, res: Response, next: NextFunction) => {
   try {
+    const actor = getActor(req);
+    const requestedProviderId = req.query.provider_id as string | undefined;
+    const providerScoped = requestedProviderId ? canAccessProvider(actor, requestedProviderId) : false;
     const filters = {
       booking_id: req.query.booking_id as string | undefined,
-      service_case_id: req.query.service_case_id as string | undefined,
-      provider_id: req.query.provider_id as string | undefined,
-      customer_user_id: req.query.customer_user_id as string | undefined,
+      service_case_id: isPrivilegedBookingActor(actor) || providerScoped
+        ? (req.query.service_case_id as string | undefined)
+        : undefined,
+      provider_id: isPrivilegedBookingActor(actor) || providerScoped
+        ? requestedProviderId
+        : undefined,
+      customer_user_id: isPrivilegedBookingActor(actor) || providerScoped
+        ? (req.query.customer_user_id as string | undefined)
+        : actor.id,
       status: req.query.status as QuoteStatus | undefined,
     };
     const quotes = bookingService.listQuotes(filters);
@@ -381,6 +390,8 @@ bookingRouter.get('/quotes', (req: Request, res: Response, next: NextFunction) =
 
 bookingRouter.get('/quotes/:id', (req: Request, res: Response, next: NextFunction) => {
   try {
+    const actor = getActor(req);
+    assertQuoteReadAccess(actor, req.params.id);
     const quote = bookingService.getQuote(req.params.id);
     res.json({ success: true, data: quote });
   } catch (err) {
