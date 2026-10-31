@@ -230,7 +230,7 @@ export class MarketplaceRepository {
       SELECT
         l.id AS listing_id,l.product_id,l.store_id,s.slug AS store_slug,s.display_name AS store_name,
         s.status AS store_status,o.status AS organization_status,
-        p.title,p.description,p.product_type,p.brand,p.condition,p.authenticity_claim,
+        p.title,p.description,p.product_type,p.brand,p.seller_sku,p.manufacturer_part_number,p.condition,p.authenticity_claim,
         p.authenticity_verification_status,p.fitment_status,p.status AS product_status,
         c.code AS category_code,c.name AS category_name,
         l.status AS listing_status,l.price_minor,l.compare_at_price_minor,l.currency,
@@ -258,7 +258,7 @@ export class MarketplaceRepository {
       row.listing_status==='PUBLISHED';
 
     const searchText=[
-      row.title,row.description,row.brand,row.category_code,row.category_name,row.product_type,row.store_name
+      row.title,row.description,row.brand,row.seller_sku,row.manufacturer_part_number,row.category_code,row.category_name,row.product_type,row.store_name
     ].filter(Boolean).join(' ').toLowerCase();
 
     db.prepare(`
