@@ -4571,6 +4571,62 @@ export const MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    id: '021_personalized_car_care',
+    name: 'Personalized Car Care profiles and explainable evaluations (GAR-020)',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS vehicle_care_profiles (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          vehicle_id TEXT NOT NULL REFERENCES vehicles(id) ON DELETE CASCADE,
+          usage_pattern TEXT NOT NULL DEFAULT 'UNKNOWN',
+          annual_distance_band TEXT NOT NULL DEFAULT 'UNKNOWN',
+          road_exposure TEXT NOT NULL DEFAULT 'UNKNOWN',
+          parking_context TEXT NOT NULL DEFAULT 'UNKNOWN',
+          climate_exposures_json TEXT NOT NULL DEFAULT '[]',
+          long_trip_frequency TEXT NOT NULL DEFAULT 'UNKNOWN',
+          heavy_load_frequency TEXT NOT NULL DEFAULT 'UNKNOWN',
+          profile_version INTEGER NOT NULL DEFAULT 1,
+          source_type TEXT NOT NULL DEFAULT 'OWNER_CONFIGURED',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          UNIQUE(user_id, vehicle_id),
+          CHECK (usage_pattern IN ('UNKNOWN','OCCASIONAL','DAILY_COMMUTE','MIXED','LONG_DISTANCE','LIGHT_COMMERCIAL')),
+          CHECK (annual_distance_band IN ('UNKNOWN','UNDER_5000_KM','KM_5000_10000','KM_10000_20000','KM_20000_30000','OVER_30000_KM')),
+          CHECK (road_exposure IN ('UNKNOWN','PAVED_MOSTLY','MIXED','ROUGH_ROADS_FREQUENT')),
+          CHECK (parking_context IN ('UNKNOWN','GARAGED','COVERED_OUTDOOR','OUTDOOR_EXPOSED','MIXED')),
+          CHECK (long_trip_frequency IN ('UNKNOWN','RARE','OCCASIONAL','MONTHLY','FREQUENT')),
+          CHECK (heavy_load_frequency IN ('UNKNOWN','NEVER','OCCASIONAL','FREQUENT')),
+          CHECK (source_type = 'OWNER_CONFIGURED')
+        );
+        CREATE INDEX IF NOT EXISTS idx_vehicle_care_profiles_vehicle
+          ON vehicle_care_profiles(vehicle_id, user_id);
+
+        CREATE TABLE IF NOT EXISTS car_care_personalization_evaluations (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          vehicle_id TEXT NOT NULL REFERENCES vehicles(id) ON DELETE CASCADE,
+          profile_id TEXT REFERENCES vehicle_care_profiles(id) ON DELETE SET NULL,
+          rule_version TEXT NOT NULL,
+          input_fingerprint TEXT NOT NULL,
+          recommendation_count INTEGER NOT NULL,
+          recommendations_json TEXT NOT NULL,
+          evidence_summary_json TEXT NOT NULL,
+          generated_at TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_car_care_evaluations_vehicle
+          ON car_care_personalization_evaluations(user_id, vehicle_id, generated_at DESC);
+      `);
+    },
+    down: (db) => {
+      db.exec(`
+        DROP TABLE IF EXISTS car_care_personalization_evaluations;
+        DROP TABLE IF EXISTS vehicle_care_profiles;
+      `);
+    },
+  },
 ];
 
 /**

@@ -713,3 +713,41 @@ export const SPRINT_19_TRACEABILITY_MATRIX: TraceabilityItem[] = [
     notes: 'Car Care is an education and routing layer over authoritative maintenance/issue state. Guidance cards explicitly state is_diagnosis=false. Owner mission completion is not professional inspection or safety certification.',
   },
 ];
+
+
+/**
+ * Sprint 20 — Personalized Car Care (GAR-020).
+ */
+export const SPRINT_20_TRACEABILITY_MATRIX: TraceabilityItem[] = [
+  {
+    requirement_id: 'GAR-DEV-S20',
+    source: 'GAR-020/GAR-004/GAR-006/GAR-008/GAR-009/GAR-010/GAR-035/GAR-039/GAR-040/GAR-049',
+    title: 'Personalized Car Care',
+    criticality: 'LAUNCH_CRITICAL',
+    status: 'VERIFIED',
+    implementation_refs: [
+      'src/server/carCare/types.ts',
+      'src/server/carCare/carCareRepository.ts',
+      'src/server/carCare/personalizationEngine.ts',
+      'src/server/carCare/carCareService.ts',
+      'src/server/api/carCareRouter.ts',
+      'src/client/components/BentoCarCare.tsx',
+    ],
+    schema_refs: [
+      'vehicle_care_profiles',
+      'car_care_personalization_evaluations',
+    ],
+    api_event_refs: [
+      'GET/PATCH /api/v1/vehicles/:id/car-care/profile',
+      'GET /api/v1/vehicles/:id/car-care/personalized',
+      'POST /api/v1/vehicles/:id/car-care/personalized/evaluate',
+      'GET /api/v1/vehicles/:id/car-care/personalized/evaluations',
+      'car_care.profile.updated',
+      'car_care.personalization.evaluated',
+    ],
+    ui_refs: ['src/client/components/BentoCarCare.tsx'],
+    test_refs: ['tests/integration/personalizedCarCareArchitecture.test.ts'],
+    ops_refs: ['audit_events', 'outbox_events'],
+    notes: 'Personalization is deterministic and explainable. It uses only recorded vehicle evidence and owner-configured context; no precise-location inference or AI inference is used. Recommendations never mutate canonical maintenance schedules or diagnose faults.',
+  },
+];
