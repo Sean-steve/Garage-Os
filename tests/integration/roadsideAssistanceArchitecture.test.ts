@@ -289,7 +289,12 @@ describe('Roadside Assistance Core Architecture (GAR-014)', () => {
       driverActor
     );
 
-    // 2. Request assistance
+    // 2. Persist mandatory triage, then request assistance
+    await roadsideService.conductTriage(
+      incidentAgg.incident.id,
+      { engine_cranks: false, lights_and_dash_work: false },
+      driverActor
+    );
     const { offers } = await roadsideService.requestAssistance(incidentAgg.incident.id, undefined, driverActor);
     const offer = offers[0];
 
@@ -390,6 +395,11 @@ describe('Roadside Assistance Core Architecture (GAR-014)', () => {
       driverActor
     );
 
+    await roadsideService.conductTriage(
+      incidentAgg.incident.id,
+      { brakes_or_steering_unresponsive: true },
+      driverActor
+    );
     const { offers } = await roadsideService.requestAssistance(incidentAgg.incident.id, undefined, driverActor);
     const { assignment } = await roadsideService.respondToOffer(offers[0].id, true, { eta_minutes: 10 }, providerActor);
 
@@ -450,7 +460,12 @@ describe('Roadside Assistance Core Architecture (GAR-014)', () => {
     );
     assert.equal(evidence.evidence_type, EvidenceType.SCENE_PHOTO);
 
-    // 3. Request assistance & dispatch
+    // 3. Persist mandatory triage, then request assistance & dispatch
+    await roadsideService.conductTriage(
+      incidentAgg.incident.id,
+      { keys_locked_inside: true },
+      driverActor
+    );
     const { offers } = await roadsideService.requestAssistance(incidentAgg.incident.id, undefined, driverActor);
     const { assignment } = await roadsideService.respondToOffer(offers[0].id, true, { eta_minutes: 15 }, providerActor);
 
