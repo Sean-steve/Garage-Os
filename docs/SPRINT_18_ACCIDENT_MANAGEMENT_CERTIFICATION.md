@@ -176,7 +176,7 @@ Initial Sprint 18 code-head certification:
 - Production build: **PASS**
 - Workflow URL: https://github.com/Sean-steve/Garage-Os/actions/runs/41186899727
 
-The final documentation/traceability head is subjected to the same certification gate before merge.
+The final documentation/traceability head must independently pass the same certification gate before merge. A green implementation-head run is evidence for the code, but never substitutes for the final PR-head check.
 
 ## Sprint 19 readiness
 
