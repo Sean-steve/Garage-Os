@@ -365,7 +365,7 @@ export class TrustedContactService {
           },
           actor_id: grant.contact_id,
           actor_type: CanonicalActorType.TRUSTED_CONTACT,
-          provenance_class: DataProvenanceClass.EXTERNALLY_VERIFIED,
+          provenance_class: DataProvenanceClass.DERIVED_DETERMINISTIC,
           payload: {
             incident_id: grant.incident_id,
             grant_id: grant.id,
