@@ -22,6 +22,7 @@ export const BentoMarketplacePayments:React.FC<Props>=({actor,onNotify})=>{
   const [refundAmount,setRefundAmount]=useState<Record<string,string>>({});
   const [refundReason,setRefundReason]=useState<Record<string,string>>({});
   const [busy,setBusy]=useState(false);
+  const [fulfillmentOrders,setFulfillmentOrders]=useState<Set<string>>(new Set());
 
   const [organizationId,setOrganizationId]=useState('');
   const [stores,setStores]=useState<any[]>([]);
@@ -35,7 +36,7 @@ export const BentoMarketplacePayments:React.FC<Props>=({actor,onNotify})=>{
   useEffect(()=>{if(!organizationId&&sellerMemberships.length)setOrganizationId(sellerMemberships[0].organization_id);},[organizationId,sellerMemberships]);
 
   const loadBuyer=useCallback(async()=>{
-    const [o,p]=await Promise.all([fetch('/api/v1/marketplace/orders'),fetch('/api/v1/marketplace/payments/providers')]);
+    const [o,p,fu]=await Promise.all([fetch('/api/v1/marketplace/orders'),fetch('/api/v1/marketplace/payments/providers'),fetch('/api/v1/marketplace/fulfillments')]);
     if(o.ok){const j=await o.json();const list=(j.data||j).orders||[];setOrders(list);
       const pairs=await Promise.all(list.map(async(d:any)=>{
         const r=await fetch('/api/v1/marketplace/orders/'+d.order.id+'/finance');
@@ -43,6 +44,7 @@ export const BentoMarketplacePayments:React.FC<Props>=({actor,onNotify})=>{
       }));setFinance(Object.fromEntries(pairs));
     }
     if(p.ok){const j=await p.json();const list=(j.data||j).providers||[];setProviders(list);}
+    if(fu.ok){const j=await fu.json();const list=(j.data||j).fulfillments||[];setFulfillmentOrders(new Set(list.map((x:any)=>String(x.fulfillment.order_id))));}
   },[]);
   useEffect(()=>{if(view==='buyer')void loadBuyer();},[view,loadBuyer]);
 
@@ -134,7 +136,8 @@ export const BentoMarketplacePayments:React.FC<Props>=({actor,onNotify})=>{
         <div className="flex flex-wrap justify-between gap-4"><div><p className="text-[10px] uppercase tracking-wider text-slate-500">{detail.order.order_number}</p><h3 className="mt-1 font-bold">{String(f.commercial_status||'AWAITING_PAYMENT').replaceAll('_',' ')}</h3><p className="mt-1 text-xs text-slate-400">Captured {money(f.captured_minor||0,detail.order.currency)} • Refunded {money(f.refunded_minor||0,detail.order.currency)}</p></div><p className="text-lg font-bold">{money(detail.order.total_minor,detail.order.currency)}</p></div>
         {f.payment_available&&<div className="mt-4 flex flex-wrap gap-2"><select value={selectedProvider[detail.order.id]||providers[0]?.provider_key||''} onChange={e=>setSelectedProvider(v=>({...v,[detail.order.id]:e.target.value}))} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">{providers.map(p=><option key={p.provider_key} value={p.provider_key}>{p.display_name} • {p.mode}</option>)}</select><button disabled={busy||!providers.length} onClick={()=>void createIntent(detail.order)} className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold disabled:opacity-40">Create payment intent</button></div>}
         {handoff&&<div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-amber-100"><b>External provider handoff required.</b><br/>Client reference: {handoff.intent?.client_reference}. Garage OS is waiting for the signed provider callback; this screen cannot self-confirm payment.</div>}
-        {refundable>0&&finance[detail.order.id]?.refunds!==undefined&&<div className="mt-4 border-t border-slate-800 pt-4"><p className="text-xs font-semibold">Refundable balance: {money(refundable,detail.order.currency)}</p><div className="mt-2 flex flex-wrap gap-2"><input type="number" min="0" step="0.01" value={refundAmount[detail.order.id]||''} onChange={e=>setRefundAmount(v=>({...v,[detail.order.id]:e.target.value}))} placeholder="Refund amount" className="w-36 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs"/><input value={refundReason[detail.order.id]||''} onChange={e=>setRefundReason(v=>({...v,[detail.order.id]:e.target.value}))} placeholder="Reason" className="min-w-[220px] flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs"/><button disabled={busy} onClick={()=>void requestRefund(detail.order,refundable)} className="rounded-lg border border-rose-800 px-3 py-2 text-xs text-rose-300">Request refund</button></div></div>}
+        {refundable>0&&finance[detail.order.id]?.refunds!==undefined&&!fulfillmentOrders.has(detail.order.id)&&<div className="mt-4 border-t border-slate-800 pt-4"><p className="text-xs font-semibold">Refundable balance: {money(refundable,detail.order.currency)}</p><div className="mt-2 flex flex-wrap gap-2"><input type="number" min="0" step="0.01" value={refundAmount[detail.order.id]||''} onChange={e=>setRefundAmount(v=>({...v,[detail.order.id]:e.target.value}))} placeholder="Refund amount" className="w-36 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs"/><input value={refundReason[detail.order.id]||''} onChange={e=>setRefundReason(v=>({...v,[detail.order.id]:e.target.value}))} placeholder="Reason" className="min-w-[220px] flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs"/><button disabled={busy} onClick={()=>void requestRefund(detail.order,refundable)} className="rounded-lg border border-rose-800 px-3 py-2 text-xs text-rose-300">Request refund</button></div></div>}
+        {refundable>0&&fulfillmentOrders.has(detail.order.id)&&<div className="mt-4 rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-3 text-xs text-cyan-100">Physical fulfillment has started. Use the Fulfillment workspace to request a return; the seller requests the provider refund only after physical receipt.</div>}
       </article>;
     }):<p className="rounded-xl border border-dashed border-slate-800 p-10 text-center text-sm text-slate-500">No marketplace orders.</p>}</div>}
 
