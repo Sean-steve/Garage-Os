@@ -18,6 +18,8 @@ import { garageOperationsService } from '../operations/garageOperationsService';
 import { CanonicalAppError, ErrorCode } from '../../shared/errors';
 import { assertAuthorized } from '../identity/policyEngine';
 import { CanonicalPermission } from '../identity/rbac';
+import { getDatabase } from '../database/connection';
+import { PlatformRole } from '../identity/types';
 import {
   AccountStatus,
   AuthenticatedActorContext,
@@ -54,6 +56,33 @@ function getActor(req: Request): AuthenticatedActorContext & { actor_id: string 
     actor_id: req.actor!.user_id || req.actor!.id,
   };
 }
+
+function requireGarageOperator(req: Request, _res: Response, next: NextFunction): void {
+  const actor = req.actor!;
+  const elevated = actor.platform_roles?.some((role) =>
+    [PlatformRole.PLATFORM_ADMIN, PlatformRole.OPERATIONS, PlatformRole.TRUST_AND_SAFETY].includes(role)
+  );
+  if (elevated) return next();
+
+  const orgIds = actor.memberships
+    .filter((m) => m.status === MembershipStatus.ACTIVE)
+    .map((m) => m.organization_id);
+  if (orgIds.length === 0) {
+    return next(new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Garage operator access required', 403));
+  }
+
+  const db = getDatabase();
+  const placeholders = orgIds.map(() => '?').join(',');
+  const provider = db.prepare(
+    `SELECT id FROM service_providers WHERE organization_id IN (${placeholders}) AND status = 'ACTIVE' LIMIT 1;`
+  ).get(...orgIds);
+  if (!provider) {
+    return next(new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Garage operator access required', 403));
+  }
+  next();
+}
+
+operationsRouter.use('/operations', requireGarageOperator);
 
 // ---------------- Service Cases ----------------
 
