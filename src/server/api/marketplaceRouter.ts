@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { authenticate } from './authMiddleware';
 import { marketplaceService } from '../marketplace/marketplaceService';
+import { CanonicalAppError, ErrorCode } from '../../shared/errors';
 
 export const marketplaceRouter=Router();
 marketplaceRouter.use(authenticate());
@@ -66,7 +67,7 @@ marketplaceRouter.post('/marketplace/seller/stores/:storeId/products',(req:Reque
     const forbidden=['fitment','fitment_status','compatible_vehicle','compatible_vehicles','vehicle_make','vehicle_model','model_year'];
     const supplied=Object.keys(req.body||{}).filter(k=>forbidden.includes(k.toLowerCase()));
     if(supplied.length){
-      throw new Error('Vehicle fitment/compatibility fields are not accepted in Sprint 22');
+      throw new CanonicalAppError(ErrorCode.VALIDATION_ERROR,'Vehicle fitment/compatibility fields are not accepted in Sprint 22',400);
     }
     res.status(201).canonicalSuccess(marketplaceService.createProduct(req.actor!,req.params.storeId,req.body||{}));
   }catch(err){next(err);}
@@ -77,7 +78,7 @@ marketplaceRouter.patch('/marketplace/seller/stores/:storeId/products/:productId
     const forbidden=['fitment','fitment_status','compatible_vehicle','compatible_vehicles','vehicle_make','vehicle_model','model_year'];
     const supplied=Object.keys(req.body||{}).filter(k=>forbidden.includes(k.toLowerCase()));
     if(supplied.length){
-      throw new Error('Vehicle fitment/compatibility fields are not accepted in Sprint 22');
+      throw new CanonicalAppError(ErrorCode.VALIDATION_ERROR,'Vehicle fitment/compatibility fields are not accepted in Sprint 22',400);
     }
     res.canonicalSuccess(marketplaceService.updateProduct(req.actor!,req.params.storeId,req.params.productId,req.body||{}));
   }catch(err){next(err);}
@@ -85,6 +86,11 @@ marketplaceRouter.patch('/marketplace/seller/stores/:storeId/products/:productId
 
 marketplaceRouter.post('/marketplace/seller/stores/:storeId/products/:productId/listing',(req:Request,res:Response,next:NextFunction)=>{
   try{res.status(201).canonicalSuccess(marketplaceService.createListing(req.actor!,req.params.storeId,req.params.productId,req.body||{}));}
+  catch(err){next(err);}
+});
+
+marketplaceRouter.get('/marketplace/seller/stores/:storeId/listings',(req:Request,res:Response,next:NextFunction)=>{
+  try{res.canonicalSuccess({listings:marketplaceService.listSellerListings(req.actor!,req.params.storeId)});}
   catch(err){next(err);}
 });
 
