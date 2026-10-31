@@ -2,7 +2,7 @@
 
 ## Status
 
-**GAR-DEV-S23 IMPLEMENTED — certification pending on PR #11**
+**GAR-DEV-S23 VERIFIED — certification passed on PR #11**
 
 Sprint 23 adds contextual vehicle compatibility and fitment on top of the Sprint 22 marketplace foundation without weakening the marketplace truth boundary.
 
@@ -313,12 +313,11 @@ Sprint 23 still does **not** implement:
 
 PR: **#11**
 
-Required before merge:
+Certification run **#199** validated the implementation head after the migration-registry correction:
 
 - repository hygiene: PASS;
 - TypeScript typecheck: PASS;
 - complete automated test suite: PASS;
-- production build: PASS;
-- exact PR head certification: PASS.
+- production build: PASS.
 
-After the gate passes, this document must be updated from **IMPLEMENTED** to **VERIFIED** with the final workflow run and commit head.
+This documentation/traceability promotion is followed by one final exact-head certification run before merge.
