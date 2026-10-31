@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { authenticate } from './authMiddleware';
 import { carCareService } from '../carCare/carCareService';
+import { CanonicalAppError, ErrorCode } from '../../shared/errors';
 
 export const carCareRouter = Router();
 carCareRouter.use(authenticate());
@@ -62,7 +63,7 @@ carCareRouter.patch('/vehicles/:id/car-care/profile', (req:Request,res:Response,
     const forbidden=['location','latitude','longitude','coordinates','gps','address','city'];
     const supplied=Object.keys(req.body||{}).filter(k=>forbidden.includes(k.toLowerCase()));
     if(supplied.length>0){
-      throw new Error('Car Care profile does not accept precise location fields; use explicit exposure categories instead');
+      throw new CanonicalAppError(ErrorCode.VALIDATION_ERROR,'Car Care profile does not accept precise location fields; use explicit exposure categories instead',400);
     }
     res.canonicalSuccess({profile:carCareService.updateCareProfile(req.actor!,req.params.id,req.body||{})});
   }catch(err){next(err);}
