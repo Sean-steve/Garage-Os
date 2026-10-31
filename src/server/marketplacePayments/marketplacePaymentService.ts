@@ -190,7 +190,7 @@ export class MarketplacePaymentService{
     const provider=repo.getProviderByKey(providerKey(providerKeyInput));
     if(!provider||provider.status==='RETIRED')throw new CanonicalAppError(ErrorCode.NOT_FOUND_OR_NOT_ACCESSIBLE,'Payment provider not found',404);
     const secret=process.env[provider.webhook_secret_env];
-    if(!secret)throw new CanonicalAppError(ErrorCode.SERVICE_UNAVAILABLE,'Payment provider webhook secret is not configured',503);
+    if(!secret)throw new CanonicalAppError(ErrorCode.DEPENDENCY_UNAVAILABLE,'Payment provider webhook secret is not configured',503);
     const supplied=String(signature||'').trim().replace(/^sha256=/i,'');
     const expected=createHmac('sha256',secret).update(canonicalWebhook(input)).digest('hex');
     if(!supplied||!secureEqual(supplied,expected))throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED,'Invalid payment provider signature',401);
@@ -282,13 +282,13 @@ export class MarketplacePaymentService{
       enqueueOutboxEvent(createCanonicalEventEnvelope({
         type:this.domainEventType(input.event_type),producer:'garage-os-marketplace-payments',correlation_id:event.id,
         subject_ids:{marketplace_order:intent.order_id,marketplace_payment_intent:intent.id,...(refund?{marketplace_refund:refund.id}:{})},
-        actor_id:'payment-provider:'+provider.provider_key,actor_type:CanonicalActorType.SYSTEM,
-        provenance_class:DataProvenanceClass.PROVIDER_ASSERTED,
+        actor_id:'payment-provider:'+provider.provider_key,actor_type:CanonicalActorType.SYSTEM_WORKER,
+        provenance_class:DataProvenanceClass.EXTERNALLY_VERIFIED,
         payload:{provider_key:provider.provider_key,provider_event_id:input.provider_event_id,event_type:input.event_type,
           order_id:intent.order_id,payment_intent_id:intent.id,refund_id:refund?.id||null,amount_minor:Number(input.amount_minor),
           currency:String(input.currency).toUpperCase(),signature_verified:true}
       }),db);
-      recordAuditEvent({actor_id:'payment-provider:'+provider.provider_key,actor_type:CanonicalActorType.SYSTEM,
+      recordAuditEvent({actor_id:'payment-provider:'+provider.provider_key,actor_type:CanonicalActorType.SYSTEM_WORKER,
         action:'MARKETPLACE_PAYMENT_PROVIDER_EVENT_PROCESSED',resource_type:'marketplace_payment_provider_event',resource_id:event.id,
         correlation_id:event.id,source:'MARKETPLACE_PAYMENT_WEBHOOK',after_state:{event_type:event.event_type,provider_event_id:event.provider_event_id,
           payment_intent_id:intent.id,refund_id:refund?.id||null,signature_verified:true,processing_status:event.processing_status}},db);
