@@ -465,6 +465,15 @@ export class MarketplaceService {
     }};
   }
 
+  listSellerListings(actor:AuthenticatedActorContext,storeId:string){
+    this.requireManagedStore(actor,storeId,CanonicalPermission.MARKETPLACE_PRODUCTS_READ);
+    return marketplaceRepository.listListingsForStore(storeId).map(listing=>({
+      listing,
+      product:marketplaceRepository.getProduct(listing.product_id),
+      media:marketplaceRepository.listMedia(listing.id)
+    }));
+  }
+
   getSellerListing(actor:AuthenticatedActorContext,storeId:string,listingId:string){
     this.requireManagedStore(actor,storeId,CanonicalPermission.MARKETPLACE_PRODUCTS_READ);
     const listing=marketplaceRepository.getListing(listingId);
