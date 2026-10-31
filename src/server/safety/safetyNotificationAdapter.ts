@@ -11,6 +11,7 @@ export interface SafetyNotificationRequest {
   destination: string;
   incident_id: string;
   contact_id: string;
+  portal_url: string;
   message: string;
 }
 
