@@ -14,6 +14,7 @@ import { authService } from '../identity/authService';
 import { assertAuthorized, ResourceAuthorizationContext } from '../identity/policyEngine';
 import { CanonicalPermission } from '../identity/rbac';
 import { AccountStatus, AuthenticatedActorContext } from '../identity/types';
+import { config } from '../config/env';
 
 declare global {
   namespace Express {
@@ -45,10 +46,17 @@ export function authenticate(options: { optional?: boolean } = {}) {
 
       if (token) {
         actor = authService.authenticateSession(token, activeOrgId);
-      } else if (explicitActorId) {
+      } else if (
+        explicitActorId &&
+        config.APP_ENV !== 'production' &&
+        config.ALLOW_DEV_ACTOR_HEADERS
+      ) {
         actor = authService.getActorContextById(explicitActorId.trim(), activeOrgId);
-      } else if (process.env.NODE_ENV !== 'production') {
-        // Controlled development seed fallback (Sprint 1 & 2 seed owner: Jane Wambui)
+      } else if (
+        config.APP_ENV !== 'production' &&
+        config.ALLOW_DEV_ACTOR_HEADERS
+      ) {
+        // Explicitly opt-in development seed fallback. Disabled by default.
         actor = authService.getActorContextById('usr_seed_owner_01', activeOrgId);
       }
 
