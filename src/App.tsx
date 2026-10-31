@@ -11,6 +11,7 @@ import { BentoFuelCosts } from './client/components/BentoFuelCosts';
 import { BentoMaintenance } from './client/components/BentoMaintenance';
 import { BentoIssues } from './client/components/BentoIssues';
 import { BentoBookings } from './client/components/BentoBookings';
+import { BentoWorkshop } from './client/components/BentoWorkshop';
 import { BentoMobility } from './client/components/BentoMobility';
 import { LoginScreen } from './client/components/LoginScreen';
 import { BentoTimeline } from './client/components/BentoTimeline';
@@ -46,6 +47,13 @@ export default function App() {
   const isPlatformAdmin = Boolean(
     sessionActor?.platform_roles?.some((role: string) =>
       ['PLATFORM_ADMIN'].includes(role)
+    )
+  );
+  const isProviderActor = Boolean(
+    sessionActor?.memberships?.some((membership: any) =>
+      ['GARAGE', 'AUTOMOTIVE_SERVICE_PROVIDER', 'ROADSIDE_PROVIDER', 'TOWING_PROVIDER'].includes(
+        membership.organization_type
+      )
     )
   );
 
@@ -329,6 +337,7 @@ export default function App() {
           'Vehicle Owner'
         }
         showAdminTools={isPlatformAdmin}
+        showProviderTools={isProviderActor}
         onLogout={handleLogout}
       />
 
@@ -390,6 +399,10 @@ export default function App() {
             onSelectVehicle={setSelectedVehicleId}
             onNotify={setActionStatus}
           />
+        )}
+
+        {activeTab === 'workshop' && isProviderActor && (
+          <BentoWorkshop onNotify={setActionStatus} />
         )}
 
         {activeTab === 'mobility' && (
