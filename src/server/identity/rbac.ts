@@ -142,6 +142,8 @@ export enum CanonicalPermission {
   MARKETPLACE_PRODUCTS_MANAGE = 'marketplace.products.manage',
   MARKETPLACE_ORDERS_READ = 'marketplace.orders.read',
   MARKETPLACE_ORDERS_MANAGE = 'marketplace.orders.manage',
+  MARKETPLACE_REVIEWS_MODERATE = 'marketplace.reviews.moderate',
+  MARKETPLACE_DISPUTES_MODERATE = 'marketplace.disputes.moderate',
 
   // Fleet
   FLEET_VEHICLES_READ = 'fleet.vehicles.read',
@@ -698,6 +700,8 @@ export const PLATFORM_ROLE_PERMISSIONS: Record<PlatformRole, readonly CanonicalP
     CanonicalPermission.PROVIDER_STAFF_READ,
     CanonicalPermission.ADMIN_AUDIT_READ,
     CanonicalPermission.ADMIN_PLATFORM_MANAGE,
+    CanonicalPermission.MARKETPLACE_REVIEWS_MODERATE,
+    CanonicalPermission.MARKETPLACE_DISPUTES_MODERATE,
     CanonicalPermission.BOOKING_CREATE,
     CanonicalPermission.BOOKING_READ,
     CanonicalPermission.BOOKING_CANCEL,
@@ -796,6 +800,8 @@ export const PLATFORM_ROLE_PERMISSIONS: Record<PlatformRole, readonly CanonicalP
     CanonicalPermission.VEHICLE_TIMELINE_READ,
     CanonicalPermission.VEHICLE_TIMELINE_DISPUTE,
     CanonicalPermission.VEHICLE_PASSPORT_READ,
+    CanonicalPermission.MARKETPLACE_REVIEWS_MODERATE,
+    CanonicalPermission.MARKETPLACE_DISPUTES_MODERATE,
   ],
   [PlatformRole.FINANCE_OPERATOR]: [
     CanonicalPermission.ADMIN_AUDIT_READ,

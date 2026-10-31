@@ -5485,6 +5485,131 @@ export const MIGRATIONS: Migration[] = [
         DROP TABLE IF EXISTS marketplace_fulfillments;
       `);
     },
+  },
+  {
+    id: '028_marketplace_trust_reviews_disputes',
+    name: 'Marketplace Trust, Reviews & Disputes (Sprint 27)',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS marketplace_reviews (
+          id TEXT PRIMARY KEY,
+          target_type TEXT NOT NULL,
+          store_id TEXT NOT NULL REFERENCES marketplace_stores(id) ON DELETE RESTRICT,
+          product_id TEXT REFERENCES marketplace_products(id) ON DELETE RESTRICT,
+          order_id TEXT NOT NULL REFERENCES marketplace_orders(id) ON DELETE RESTRICT,
+          order_item_id TEXT REFERENCES marketplace_order_items(id) ON DELETE RESTRICT,
+          buyer_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          rating INTEGER NOT NULL,
+          title TEXT,
+          body TEXT,
+          verified_purchase INTEGER NOT NULL DEFAULT 1,
+          status TEXT NOT NULL,
+          moderation_reason TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          CHECK (target_type IN ('STORE','PRODUCT')),
+          CHECK (rating BETWEEN 1 AND 5),
+          CHECK (verified_purchase = 1),
+          CHECK (status IN ('PUBLISHED','UNDER_REVIEW','HIDDEN','REMOVED')),
+          CHECK (
+            (target_type='STORE' AND product_id IS NULL AND order_item_id IS NULL)
+            OR
+            (target_type='PRODUCT' AND product_id IS NOT NULL AND order_item_id IS NOT NULL)
+          )
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_marketplace_store_review_once
+          ON marketplace_reviews(order_id,target_type) WHERE target_type='STORE';
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_marketplace_product_review_once
+          ON marketplace_reviews(order_id,product_id,target_type) WHERE target_type='PRODUCT';
+        CREATE INDEX IF NOT EXISTS idx_marketplace_reviews_store
+          ON marketplace_reviews(store_id,status,created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_marketplace_reviews_product
+          ON marketplace_reviews(product_id,status,created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS marketplace_review_responses (
+          id TEXT PRIMARY KEY,
+          review_id TEXT UNIQUE NOT NULL REFERENCES marketplace_reviews(id) ON DELETE CASCADE,
+          store_id TEXT NOT NULL REFERENCES marketplace_stores(id) ON DELETE RESTRICT,
+          responder_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          body TEXT NOT NULL,
+          status TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          CHECK (status IN ('PUBLISHED','REMOVED'))
+        );
+
+        CREATE TABLE IF NOT EXISTS marketplace_review_reports (
+          id TEXT PRIMARY KEY,
+          review_id TEXT NOT NULL REFERENCES marketplace_reviews(id) ON DELETE CASCADE,
+          reporter_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          reporter_store_id TEXT REFERENCES marketplace_stores(id) ON DELETE RESTRICT,
+          reason TEXT NOT NULL,
+          status TEXT NOT NULL,
+          resolution_note TEXT,
+          created_at TEXT NOT NULL,
+          resolved_at TEXT,
+          UNIQUE(review_id,reporter_user_id),
+          CHECK (status IN ('OPEN','RESOLVED','DISMISSED'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_review_reports
+          ON marketplace_review_reports(status,created_at);
+
+        CREATE TABLE IF NOT EXISTS marketplace_disputes (
+          id TEXT PRIMARY KEY,
+          dispute_number TEXT UNIQUE NOT NULL,
+          order_id TEXT NOT NULL REFERENCES marketplace_orders(id) ON DELETE RESTRICT,
+          store_id TEXT NOT NULL REFERENCES marketplace_stores(id) ON DELETE RESTRICT,
+          buyer_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          category TEXT NOT NULL,
+          status TEXT NOT NULL,
+          summary TEXT NOT NULL,
+          buyer_requested_outcome TEXT,
+          assigned_to_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+          resolution_action TEXT,
+          resolution_summary TEXT,
+          opened_at TEXT NOT NULL,
+          resolved_at TEXT,
+          closed_at TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          CHECK (category IN ('ORDER_NOT_RECEIVED','ITEM_NOT_AS_DESCRIBED','DAMAGED','FITMENT_MISMATCH','PAYMENT_REFUND','RETURN_REFUND','SELLER_CONDUCT','OTHER')),
+          CHECK (status IN ('OPEN','SELLER_RESPONSE_REQUIRED','UNDER_REVIEW','RESOLVED','CLOSED')),
+          CHECK (resolution_action IS NULL OR resolution_action IN ('NO_ACTION','PARTIES_AGREED','RETURN_WORKFLOW','FINANCE_REVIEW','ACCOUNT_ACTION_REVIEW'))
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_marketplace_one_open_dispute_per_order
+          ON marketplace_disputes(order_id)
+          WHERE status NOT IN ('RESOLVED','CLOSED');
+        CREATE INDEX IF NOT EXISTS idx_marketplace_disputes_store
+          ON marketplace_disputes(store_id,status,opened_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_marketplace_disputes_buyer
+          ON marketplace_disputes(buyer_user_id,status,opened_at DESC);
+
+        CREATE TABLE IF NOT EXISTS marketplace_dispute_messages (
+          id TEXT PRIMARY KEY,
+          dispute_id TEXT NOT NULL REFERENCES marketplace_disputes(id) ON DELETE CASCADE,
+          author_user_id TEXT NOT NULL,
+          author_role TEXT NOT NULL,
+          audience TEXT NOT NULL,
+          body TEXT NOT NULL,
+          evidence_reference TEXT,
+          created_at TEXT NOT NULL,
+          CHECK (author_role IN ('BUYER','SELLER','TRUST_AND_SAFETY')),
+          CHECK (audience IN ('PARTIES','INTERNAL')),
+          CHECK (audience='PARTIES' OR author_role='TRUST_AND_SAFETY')
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_dispute_messages
+          ON marketplace_dispute_messages(dispute_id,created_at);
+      `);
+    },
+    down: (db) => {
+      db.exec(`
+        DROP TABLE IF EXISTS marketplace_dispute_messages;
+        DROP TABLE IF EXISTS marketplace_disputes;
+        DROP TABLE IF EXISTS marketplace_review_reports;
+        DROP TABLE IF EXISTS marketplace_review_responses;
+        DROP TABLE IF EXISTS marketplace_reviews;
+      `);
+    },
   }
 ];
 
