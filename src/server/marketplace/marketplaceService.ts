@@ -215,6 +215,60 @@ export class MarketplaceService {
     return marketplaceRepository.listProductsForStore(storeId);
   }
 
+
+  updateProduct(actor:AuthenticatedActorContext,storeId:string,productId:string,input:Partial<CreateMarketplaceProductInput>&{status?:'DRAFT'|'PAUSED'|'RETIRED'}):MarketplaceProduct{
+    const store=this.requireManagedStore(actor,storeId);
+    const current=marketplaceRepository.getProduct(productId);
+    if(!current||current.store_id!==storeId) throw new CanonicalAppError(ErrorCode.NOT_FOUND_OR_NOT_ACCESSIBLE,'Marketplace product not found',404);
+    if(current.status==='RETIRED') throw new CanonicalAppError(ErrorCode.INVALID_STATE_TRANSITION,'Retired product is immutable',409);
+    const categoryId=input.category_id??current.category_id;
+    if(!marketplaceRepository.getCategory(categoryId)) throw new CanonicalAppError(ErrorCode.NOT_FOUND_OR_NOT_ACCESSIBLE,'Marketplace category not found',404);
+    const allowedTypes=['PART','TYRE','ACCESSORY','CONSUMABLE','TOOL','ELECTRONICS','OTHER'];
+    const allowedConditions=['NEW','USED','REMANUFACTURED'];
+    const allowedClaims:MarketplaceAuthenticityClaim[]=['SELLER_CLAIMED_OEM','SELLER_CLAIMED_AFTERMARKET','GENERIC','UNKNOWN'];
+    const productType=input.product_type??current.product_type;
+    const condition=input.condition??current.condition;
+    const claim=input.authenticity_claim??current.authenticity_claim;
+    if(!allowedTypes.includes(productType)) throw new CanonicalAppError(ErrorCode.VALIDATION_ERROR,'Invalid product_type',400);
+    if(!allowedConditions.includes(condition)) throw new CanonicalAppError(ErrorCode.VALIDATION_ERROR,'Invalid condition',400);
+    if(!allowedClaims.includes(claim)) throw new CanonicalAppError(ErrorCode.VALIDATION_ERROR,'Invalid authenticity_claim',400);
+    const requestedStatus=input.status??current.status;
+    if(!['DRAFT','PAUSED','RETIRED','PUBLISHED'].includes(requestedStatus)) throw new CanonicalAppError(ErrorCode.VALIDATION_ERROR,'Invalid product status',400);
+    if(requestedStatus==='PUBLISHED'&&current.status!=='PUBLISHED'){
+      throw new CanonicalAppError(ErrorCode.INVALID_STATE_TRANSITION,'Products become published through listing publication, not direct product status mutation',409);
+    }
+    const now=getCurrentUtcIsoString();
+    const updated:MarketplaceProduct={
+      ...current,category_id:categoryId,product_type:productType,
+      seller_sku:input.seller_sku===undefined?current.seller_sku:requiredText(input.seller_sku,'seller_sku',100),
+      title:input.title===undefined?current.title:requiredText(input.title,'title',180),
+      description:input.description===undefined?current.description:requiredText(input.description,'description',4000),
+      brand:input.brand===undefined?current.brand:optionalText(input.brand,120),
+      manufacturer_part_number:input.manufacturer_part_number===undefined?current.manufacturer_part_number:optionalText(input.manufacturer_part_number,120),
+      condition,authenticity_claim:claim,authenticity_verification_status:'NOT_VERIFIED',
+      warranty_summary:input.warranty_summary===undefined?current.warranty_summary:optionalText(input.warranty_summary,1000),
+      status:requestedStatus,fitment_status:'UNKNOWN',updated_at:now
+    };
+    withTransaction(({db})=>{
+      if(!marketplaceRepository.updateProduct(updated)) throw new CanonicalAppError(ErrorCode.CONFLICT,'Product update failed',409);
+      const listing=marketplaceRepository.getListingByProduct(productId);
+      if(listing){
+        if(updated.status==='RETIRED'&&listing.status==='PUBLISHED'){
+          const paused={...listing,status:'PAUSED' as const,paused_at:now,version:listing.version+1,updated_at:now};
+          marketplaceRepository.updateListing(paused);
+        }
+        marketplaceRepository.rebuildSearchProjection(listing.id,now);
+      }
+      enqueueOutboxEvent(createCanonicalEventEnvelope({
+        type:'marketplace.product.updated',producer:'garage-os-marketplace',correlation_id:productId,
+        subject_ids:{organization:store.organization_id,marketplace_store:storeId,marketplace_product:productId},
+        actor_id:actor.user_id,actor_type:actorType(actor),provenance_class:DataProvenanceClass.OWNER_ASSERTED,
+        payload:{product_id:productId,status:updated.status,fitment_status:'UNKNOWN',authenticity_verification_status:'NOT_VERIFIED'}
+      }),db);
+    });
+    return updated;
+  }
+
   createListing(actor:AuthenticatedActorContext,storeId:string,productId:string,input:CreateMarketplaceListingInput):MarketplaceListing{
     const store=this.requireManagedStore(actor,storeId);
     const product=marketplaceRepository.getProduct(productId);
