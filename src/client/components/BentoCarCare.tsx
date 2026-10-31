@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, BookOpenCheck, CheckCircle2, CircleAlert, RefreshCw, ShieldCheck, Wrench } from 'lucide-react';
+import { AlertTriangle, BookOpenCheck, CheckCircle2, CircleAlert, RefreshCw, ShieldCheck, Sparkles, SlidersHorizontal, Wrench } from 'lucide-react';
 import { ActiveTab, VehicleSummary } from '../types';
 
 interface Props {
@@ -29,6 +29,35 @@ interface Article {
   owner_actions:string[];seek_help_when:string[];risk_level:'INFO'|'CAUTION'|'URGENT';
   professional_inspection_required:boolean;roadside_recommended:boolean;booking_recommended:boolean;source_label:string;
 }
+interface CareProfile {
+  id?:string;
+  usage_pattern:string;
+  annual_distance_band:string;
+  road_exposure:string;
+  parking_context:string;
+  climate_exposures:string[];
+  long_trip_frequency:string;
+  heavy_load_frequency:string;
+  profile_version?:number;
+}
+interface PersonalizedPlan {
+  vehicle_id:string;
+  generated_at:string;
+  rule_version:string;
+  profile:CareProfile|null;
+  profile_completeness:'NOT_CONFIGURED'|'PARTIAL'|'CONFIGURED';
+  recommendations:Array<{
+    id:string;rule_id:string;priority:Priority;title:string;explanation:string;
+    evidence:Array<{source_type:string;label:string;value:string|number|boolean|null;source_reference_id?:string}>;
+    actions:Array<{label:string;target_tab:ActiveTab;article_slug?:string}>;
+    is_diagnosis:false;changes_maintenance_schedule:false;rule_version:string;
+  }>;
+  recommended_mission_codes:string[];
+  data_quality_notes:string[];
+  safety_statement:string;
+  location_inference_used:false;
+  ai_inference_used:false;
+}
 interface Mission {
   mission:{id:string;status:string};
   template:{code:string;title:string;description:string;disclaimer:string};
@@ -42,24 +71,37 @@ export const BentoCarCare:React.FC<Props>=({vehicles,selectedVehicleId,onSelectV
   const [dashboard,setDashboard]=useState<Dashboard|null>(null);
   const [articles,setArticles]=useState<Article[]>([]);
   const [selectedArticle,setSelectedArticle]=useState<Article|null>(null);
+  const [personalized,setPersonalized]=useState<PersonalizedPlan|null>(null);
+  const [profileDraft,setProfileDraft]=useState<CareProfile>({
+    usage_pattern:'UNKNOWN',annual_distance_band:'UNKNOWN',road_exposure:'UNKNOWN',
+    parking_context:'UNKNOWN',climate_exposures:[],long_trip_frequency:'UNKNOWN',heavy_load_frequency:'UNKNOWN'
+  });
   const [loading,setLoading]=useState(false);
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState<string|null>(null);
   const notify=(m:string)=>{setMessage(m);onNotify?.(m);};
 
   const load=useCallback(async()=>{
-    if(!selectedVehicleId){setDashboard(null);return;}
+    if(!selectedVehicleId){setDashboard(null);setPersonalized(null);return;}
     setLoading(true);
     try{
-      const [dRes,aRes]=await Promise.all([
+      const [dRes,aRes,pRes]=await Promise.all([
         fetch('/api/v1/vehicles/'+selectedVehicleId+'/car-care/dashboard'),
-        fetch('/api/v1/car-care/articles')
+        fetch('/api/v1/car-care/articles'),
+        fetch('/api/v1/vehicles/'+selectedVehicleId+'/car-care/personalized')
       ]);
-      const dJson=await dRes.json(),aJson=await aRes.json();
+      const dJson=await dRes.json(),aJson=await aRes.json(),pJson=await pRes.json();
       if(!dRes.ok) throw new Error(dJson?.error?.message||'Unable to load Car Care');
       if(!aRes.ok) throw new Error(aJson?.error?.message||'Unable to load care guidance');
+      if(!pRes.ok) throw new Error(pJson?.error?.message||'Unable to load personalized care');
       setDashboard(unwrap(dJson));
       setArticles(unwrap(aJson)?.articles||[]);
+      const plan=unwrap(pJson) as PersonalizedPlan;
+      setPersonalized(plan);
+      setProfileDraft(plan.profile||{
+        usage_pattern:'UNKNOWN',annual_distance_band:'UNKNOWN',road_exposure:'UNKNOWN',
+        parking_context:'UNKNOWN',climate_exposures:[],long_trip_frequency:'UNKNOWN',heavy_load_frequency:'UNKNOWN'
+      });
     }catch(e){notify(e instanceof Error?e.message:'Unable to load Car Care');}
     finally{setLoading(false);}
   },[selectedVehicleId]);
@@ -78,6 +120,42 @@ export const BentoCarCare:React.FC<Props>=({vehicles,selectedVehicleId,onSelectV
       await load();
     }catch(e){notify(e instanceof Error?e.message:'Unable to start care mission');}
     finally{setBusy(false);}
+  };
+
+  const saveProfile=async()=>{
+    if(!selectedVehicleId) return;
+    setBusy(true);
+    try{
+      const res=await fetch('/api/v1/vehicles/'+selectedVehicleId+'/car-care/profile',{
+        method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(profileDraft)
+      });
+      const json=await res.json();
+      if(!res.ok) throw new Error(json?.error?.message||'Unable to save care profile');
+      notify('Care profile saved. Personalization uses only the context you explicitly configured.');
+      await load();
+    }catch(e){notify(e instanceof Error?e.message:'Unable to save care profile');}
+    finally{setBusy(false);}
+  };
+
+  const refreshPersonalization=async()=>{
+    if(!selectedVehicleId) return;
+    setBusy(true);
+    try{
+      const res=await fetch('/api/v1/vehicles/'+selectedVehicleId+'/car-care/personalized/evaluate',{method:'POST'});
+      const json=await res.json();
+      if(!res.ok) throw new Error(json?.error?.message||'Unable to refresh personalized care');
+      setPersonalized(unwrap(json));
+      notify('Personalized care refreshed from current recorded evidence.');
+    }catch(e){notify(e instanceof Error?e.message:'Unable to refresh personalized care');}
+    finally{setBusy(false);}
+  };
+
+  const handlePersonalizedAction=(a:{target_tab:ActiveTab;article_slug?:string})=>{
+    if(a.target_tab==='care'&&a.article_slug){
+      const found=articles.find(x=>x.slug===a.article_slug);
+      if(found){setSelectedArticle(found);return;}
+    }
+    onNavigate(a.target_tab);
   };
 
   const updateItem=async(missionId:string,itemId:string,status:string)=>{
@@ -126,6 +204,67 @@ export const BentoCarCare:React.FC<Props>=({vehicles,selectedVehicleId,onSelectV
         <div className="rounded-xl border border-slate-800 p-4"><p className="text-xs text-slate-500">Active issues</p><p className="text-xl font-bold mt-1">{dashboard.active_issue_count}</p></div>
         <div className="rounded-xl border border-slate-800 p-4"><p className="text-xs text-slate-500">Persistent issues</p><p className="text-xl font-bold mt-1">{dashboard.persistent_issue_count}</p></div>
       </div>
+
+      {personalized&&<div className="space-y-4">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-indigo-300"/><h3 className="font-bold">Personalized for this vehicle</h3></div>
+          <button disabled={busy} onClick={refreshPersonalization} className="rounded-lg border border-indigo-800 px-3 py-2 text-xs font-semibold disabled:opacity-50">Refresh evidence plan</button>
+        </div>
+
+        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-5">
+          <div className="flex items-center gap-2"><SlidersHorizontal className="h-4 w-4 text-slate-400"/><h4 className="font-semibold">Your care context</h4></div>
+          <p className="text-xs text-slate-500 mt-2">Optional and owner-configured. No GPS, address, city or hidden location inference is used.</p>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 mt-4">
+            {[
+              ['Usage pattern','usage_pattern',['UNKNOWN','OCCASIONAL','DAILY_COMMUTE','MIXED','LONG_DISTANCE','LIGHT_COMMERCIAL']],
+              ['Annual distance','annual_distance_band',['UNKNOWN','UNDER_5000_KM','KM_5000_10000','KM_10000_20000','KM_20000_30000','OVER_30000_KM']],
+              ['Road exposure','road_exposure',['UNKNOWN','PAVED_MOSTLY','MIXED','ROUGH_ROADS_FREQUENT']],
+              ['Parking','parking_context',['UNKNOWN','GARAGED','COVERED_OUTDOOR','OUTDOOR_EXPOSED','MIXED']],
+              ['Long trips','long_trip_frequency',['UNKNOWN','RARE','OCCASIONAL','MONTHLY','FREQUENT']],
+              ['Heavy loads','heavy_load_frequency',['UNKNOWN','NEVER','OCCASIONAL','FREQUENT']]
+            ].map(([label,key,options]:any)=><label key={key} className="text-xs text-slate-400">{label}
+              <select value={(profileDraft as any)[key]} onChange={e=>setProfileDraft({...profileDraft,[key]:e.target.value})} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm">
+                {options.map((o:string)=><option key={o} value={o}>{o.replaceAll('_',' ')}</option>)}
+              </select>
+            </label>)}
+          </div>
+          <div className="mt-4">
+            <p className="text-xs text-slate-400 mb-2">Environmental exposure you choose to report</p>
+            <div className="flex flex-wrap gap-2">
+              {['DUSTY','HOT','HUMID','HEAVY_RAIN','COASTAL_SALT','COLD'].map(x=>{
+                const active=profileDraft.climate_exposures.includes(x);
+                return <button type="button" key={x} onClick={()=>setProfileDraft({...profileDraft,climate_exposures:active?profileDraft.climate_exposures.filter(v=>v!==x):[...profileDraft.climate_exposures.filter(v=>v!=='NONE_REPORTED'),x]})}
+                  className={'rounded-full border px-3 py-1.5 text-[11px] '+(active?'border-indigo-500 bg-indigo-500/15 text-indigo-200':'border-slate-700 text-slate-400')}>{x.replaceAll('_',' ')}</button>;
+              })}
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-3 flex-wrap mt-4">
+            <p className="text-[10px] text-slate-500">Profile: {personalized.profile_completeness.replaceAll('_',' ')} • Rule set: {personalized.rule_version}</p>
+            <button disabled={busy} onClick={saveProfile} className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold disabled:opacity-50">Save care profile</button>
+          </div>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          {personalized.recommendations.map(rec=><article key={rec.id} className={'rounded-xl border p-5 '+tone(rec.priority)}>
+            <div className="flex justify-between gap-3">
+              <h4 className="font-semibold">{rec.title}</h4>
+              <span className="text-[10px] rounded-full border border-slate-700 px-2 py-1">{rec.priority}</span>
+            </div>
+            <p className="text-sm text-slate-400 mt-2">{rec.explanation}</p>
+            <div className="mt-3 space-y-1">
+              {rec.evidence.map((e,i)=><p key={i} className="text-[10px] text-slate-500">{e.label}: <span className="text-slate-300">{String(e.value)}</span></p>)}
+            </div>
+            <p className="text-[10px] text-slate-500 mt-3">Rule: {rec.rule_id} • Diagnosis: NO • Maintenance schedule changed: NO</p>
+            <div className="flex flex-wrap gap-2 mt-4">{rec.actions.map((a,i)=><button key={i} onClick={()=>handlePersonalizedAction(a)} className="rounded-lg border border-slate-700 px-3 py-2 text-xs">{a.label}</button>)}</div>
+          </article>)}
+          {personalized.recommendations.length===0&&<div className="rounded-xl border border-slate-800 p-5 text-sm text-slate-500">No additional personalized care recommendations are currently generated from the configured profile and recorded evidence.</div>}
+        </div>
+
+        {personalized.data_quality_notes.length>0&&<div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4">
+          <p className="text-xs font-semibold">Data notes</p>
+          <ul className="mt-2 space-y-1 text-xs text-slate-500">{personalized.data_quality_notes.map(x=><li key={x}>• {x}</li>)}</ul>
+        </div>}
+      </div>}
 
       <div>
         <div className="flex items-center gap-2 mb-3"><CircleAlert className="h-5 w-5 text-amber-300"/><h3 className="font-bold">What needs attention</h3></div>
