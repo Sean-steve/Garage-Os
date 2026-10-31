@@ -387,7 +387,10 @@ export class SosService {
 
   async processNotificationAttempt(attemptId: string): Promise<SosNotificationAttempt | null> {
     const attempt = sosRepository.getNotificationAttempt(attemptId);
-    if (!attempt || attempt.status !== SosNotificationStatus.QUEUED) return attempt;
+    if (
+      !attempt ||
+      ![SosNotificationStatus.QUEUED, SosNotificationStatus.ATTEMPTED].includes(attempt.status)
+    ) return attempt;
 
     const incident = sosRepository.getIncidentById(attempt.incident_id);
     if (!incident || incident.status !== SosIncidentStatus.ACTIVATED) {
@@ -439,6 +442,7 @@ export class SosService {
     });
 
     const result = await getSafetyNotificationAdapter().send({
+      idempotency_key: attempt.id,
       channel: attempt.channel,
       destination,
       incident_id: incident.id,
@@ -699,7 +703,7 @@ export class SosService {
     userId: string,
     incidentId: string,
     input: InitiateSosInput,
-    preferences: HumanSafetyPreferences | null,
+    preferences: HumanSafetyPreferences,
     now: string
   ): SosLocationSnapshot | null {
     if (!preferences?.allow_location_sharing || !input.location) return null;
@@ -718,9 +722,11 @@ export class SosService {
       return null;
     }
 
-    const capturedAt = input.location.captured_at
-      ? new Date(input.location.captured_at).toISOString()
-      : now;
+    let capturedAt = now;
+    if (input.location.captured_at) {
+      const parsed = new Date(input.location.captured_at);
+      if (!Number.isNaN(parsed.getTime())) capturedAt = parsed.toISOString();
+    }
     return {
       id: generateCanonicalId('sol'),
       incident_id: incidentId,
@@ -740,7 +746,7 @@ export class SosService {
 
   private createContactNotificationAttempts(
     incident: SosIncident,
-    preferences: HumanSafetyPreferences | null,
+    preferences: HumanSafetyPreferences,
     now: string
   ): number {
     if (!preferences?.emergency_circle_enabled) return 0;
@@ -840,8 +846,24 @@ export class SosService {
     sosRepository.updateIncidentStates(incidentId, { notification_state: state, now });
   }
 
-  private getPreferences(userId: string): HumanSafetyPreferences | null {
-    return safetyRepository.getPreferences(userId);
+  private getPreferences(userId: string): HumanSafetyPreferences {
+    const existing = safetyRepository.getPreferences(userId);
+    if (existing) return existing;
+
+    const now = getCurrentUtcIsoString();
+    const defaults: HumanSafetyPreferences = {
+      user_id: userId,
+      emergency_circle_enabled: true,
+      allow_location_sharing: false,
+      safety_check_enabled: true,
+      safety_check_timeout_seconds: 120,
+      sos_cancel_countdown_seconds: 5,
+      escalation_sequence_enabled: true,
+      created_at: now,
+      updated_at: now,
+    };
+    safetyRepository.upsertPreferences(defaults);
+    return defaults;
   }
 
   private requireOwnerIncident(actor: AuthenticatedActorContext, incidentId: string): SosIncident {
