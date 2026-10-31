@@ -2,11 +2,11 @@
 
 Garage OS is a **Vehicle Ownership, Automotive Service, Mobility Safety and Vehicle Intelligence Operating System**.
 
-The repository implements the canonical Garage OS architecture through **GAR-DEV-S14** and is governed by the GAR-000 technical constitution.
+The repository implements the canonical Garage OS architecture through **GAR-DEV-S16** and is governed by the GAR-000 technical constitution.
 
 ## Current engineering baseline
 
-**Sprint 15 — Emergency Circle & Human Safety Foundation (GAR-017)**
+**Sprint 16 — SOS Engine & Emergency Activation (GAR-017)**
 
 Implemented domains:
 
@@ -25,8 +25,9 @@ Implemented domains:
 - Towing and recovery with chain of custody
 - Real-time dispatch, responder location, routing and matching
 - Emergency Circle trusted-contact configuration and human-safety policy foundation
+- Durable SOS countdown, backend acknowledgement, notification-attempt truth states and safety checks
 
-The next product sprint is **Sprint 16 — SOS Engine & Emergency Activation (GAR-017)**.
+The next product sprint is **Sprint 17 — Trusted Contact Experience (GAR-017)**.
 
 ## Architecture
 
@@ -41,7 +42,7 @@ The application is a TypeScript full-stack application:
 - WebSocket/SSE dispatch tracking
 - External integrations behind adapters
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/R1_SPRINT_1_TO_14_CERTIFICATION.md](docs/R1_SPRINT_1_TO_14_CERTIFICATION.md), and [docs/SPRINT_15_EMERGENCY_CIRCLE_CERTIFICATION.md](docs/SPRINT_15_EMERGENCY_CIRCLE_CERTIFICATION.md).
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/R1_SPRINT_1_TO_14_CERTIFICATION.md](docs/R1_SPRINT_1_TO_14_CERTIFICATION.md), and [docs/SPRINT_15_EMERGENCY_CIRCLE_CERTIFICATION.md](docs/SPRINT_15_EMERGENCY_CIRCLE_CERTIFICATION.md), plus [docs/SPRINT_16_SOS_ENGINE_CERTIFICATION.md](docs/SPRINT_16_SOS_ENGINE_CERTIFICATION.md).
 
 ## Local development
 
