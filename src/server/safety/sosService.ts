@@ -225,7 +225,6 @@ export class SosService {
 
       sosRepository.updateActivationAttemptStatus(incidentId, 'CANCELLED');
       sosRepository.revokeIncidentLocation(incidentId, now);
-      trustedContactService.revokeIncidentGrants(incidentId, 'SOS_CANCELLED');
       sosRepository.recordStatusHistory({
         id: generateCanonicalId('ssh'),
         incident_id: incidentId,
@@ -267,6 +266,7 @@ export class SosService {
     if (!changed) {
       return this.getAggregateForOwner(actor, incidentId);
     }
+    trustedContactService.revokeIncidentGrants(incidentId, 'SOS_CANCELLED');
     return this.getAggregateForOwner(actor, incidentId);
   }
 
@@ -632,7 +632,6 @@ export class SosService {
         throw new CanonicalAppError(ErrorCode.CONFLICT, 'SOS state changed concurrently', 409);
       }
       sosRepository.revokeIncidentLocation(incidentId, now);
-      trustedContactService.revokeIncidentGrants(incidentId, 'SOS_CLOSED');
       sosRepository.recordStatusHistory({
         id: generateCanonicalId('ssh'),
         incident_id: incidentId,
@@ -662,6 +661,7 @@ export class SosService {
       );
     });
 
+    trustedContactService.revokeIncidentGrants(incidentId, 'SOS_CLOSED');
     return this.getAggregateForOwner(actor, incidentId);
   }
 
