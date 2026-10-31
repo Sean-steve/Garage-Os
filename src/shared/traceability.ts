@@ -681,7 +681,7 @@ export const SPRINT_19_TRACEABILITY_MATRIX: TraceabilityItem[] = [
     source: 'GAR-020/GAR-006/GAR-008/GAR-014/GAR-013/GAR-035/GAR-039/GAR-040/GAR-049',
     title: 'Car Care Center',
     criticality: 'LAUNCH_CRITICAL',
-    status: 'IMPLEMENTED',
+    status: 'VERIFIED',
     implementation_refs: [
       'src/server/carCare/types.ts',
       'src/server/carCare/carCareRepository.ts',
