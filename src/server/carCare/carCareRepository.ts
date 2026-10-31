@@ -25,7 +25,7 @@ export class CarCareRepository {
     return getDatabase().prepare("SELECT * FROM car_care_mission_templates WHERE status='ACTIVE' ORDER BY title").all() as unknown as CareMissionTemplate[];
   }
   getTemplateByCode(code:string):CareMissionTemplate|null{
-    return (getDatabase().prepare("SELECT * FROM car_care_mission_templates WHERE code=? AND status='ACTIVE' LIMIT 1").get(code) as CareMissionTemplate|undefined)||null;
+    return (getDatabase().prepare("SELECT * FROM car_care_mission_templates WHERE code=? AND status='ACTIVE' LIMIT 1").get(code) as unknown as CareMissionTemplate|undefined)||null;
   }
   getTemplateById(id:string):CareMissionTemplate|null{
     return (getDatabase().prepare('SELECT * FROM car_care_mission_templates WHERE id=? LIMIT 1').get(id) as CareMissionTemplate|undefined)||null;
@@ -40,7 +40,7 @@ export class CarCareRepository {
     `).run(m.id,m.user_id,m.vehicle_id,m.template_id,m.status,m.started_at,m.completed_at,m.cancelled_at,m.created_at,m.updated_at);
   }
   getMission(userId:string,vehicleId:string,id:string):VehicleCareMission|null{
-    return (getDatabase().prepare('SELECT * FROM vehicle_care_missions WHERE id=? AND user_id=? AND vehicle_id=? LIMIT 1').get(id,userId,vehicleId) as VehicleCareMission|undefined)||null;
+    return (getDatabase().prepare('SELECT * FROM vehicle_care_missions WHERE id=? AND user_id=? AND vehicle_id=? LIMIT 1').get(id,userId,vehicleId) as unknown as VehicleCareMission|undefined)||null;
   }
   getActiveMissionForTemplate(userId:string,vehicleId:string,templateId:string):VehicleCareMission|null{
     return (getDatabase().prepare("SELECT * FROM vehicle_care_missions WHERE user_id=? AND vehicle_id=? AND template_id=? AND status='ACTIVE' LIMIT 1").get(userId,vehicleId,templateId) as VehicleCareMission|undefined)||null;
