@@ -237,6 +237,7 @@ bookingRouter.get('/bookings/:id', (req: Request, res: Response, next: NextFunct
 bookingRouter.post('/bookings/:id/confirm', (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertBookingProviderAccess(actor, req.params.id);
     const booking = bookingService.confirmBooking(
       { actor_id: actor.actor_id, roles: actor.roles, name: `${actor.profile?.display_name || 'Advisor'}` },
       req.params.id,
@@ -251,6 +252,7 @@ bookingRouter.post('/bookings/:id/confirm', (req: Request, res: Response, next: 
 bookingRouter.post('/bookings/:id/reschedule', (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertBookingReadAccess(actor, req.params.id);
     const revision = bookingService.proposeReschedule(
       { actor_id: actor.actor_id, roles: actor.roles, name: `${actor.profile?.display_name || 'User'}` },
       req.params.id,
@@ -265,6 +267,7 @@ bookingRouter.post('/bookings/:id/reschedule', (req: Request, res: Response, nex
 bookingRouter.post('/bookings/:id/reschedule/accept', (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertBookingReadAccess(actor, req.params.id);
     const { revision_id } = req.body;
     if (!revision_id) {
       throw new CanonicalAppError(ErrorCode.VALIDATION_ERROR, 'revision_id is required', 400);
@@ -283,6 +286,7 @@ bookingRouter.post('/bookings/:id/reschedule/accept', (req: Request, res: Respon
 bookingRouter.post('/bookings/:id/cancel', (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertBookingReadAccess(actor, req.params.id);
     const booking = bookingService.cancelBooking(
       { actor_id: actor.actor_id, roles: actor.roles, name: `${actor.profile?.display_name || 'User'}` },
       req.params.id,
@@ -297,6 +301,7 @@ bookingRouter.post('/bookings/:id/cancel', (req: Request, res: Response, next: N
 bookingRouter.post('/bookings/:id/check-in', (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertBookingProviderAccess(actor, req.params.id);
     const result = bookingService.checkInBooking(
       { actor_id: actor.actor_id, roles: actor.roles, name: `${actor.profile?.display_name || 'Service Advisor'}` },
       req.params.id,
@@ -311,6 +316,7 @@ bookingRouter.post('/bookings/:id/check-in', (req: Request, res: Response, next:
 bookingRouter.post('/bookings/:id/complete', (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertBookingProviderAccess(actor, req.params.id);
     const booking = bookingService.completeBooking(
       { actor_id: actor.actor_id, roles: actor.roles, name: `${actor.profile?.display_name || 'Advisor'}` },
       req.params.id
@@ -328,6 +334,7 @@ bookingRouter.post('/bookings/:id/complete', (req: Request, res: Response, next:
 bookingRouter.post('/estimates', (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertProviderAccess(actor, req.body.provider_id);
     const estimate = bookingService.createEstimate(
       { actor_id: actor.actor_id, roles: actor.roles, name: `${actor.profile?.display_name || 'Advisor'}` },
       req.body
@@ -345,6 +352,7 @@ bookingRouter.post('/estimates', (req: Request, res: Response, next: NextFunctio
 bookingRouter.post('/quotes', (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertProviderAccess(actor, req.body.provider_id);
     const quote = bookingService.createQuote(
       { actor_id: actor.actor_id, roles: actor.roles, name: `${actor.profile?.display_name || 'Advisor'}` },
       req.body
@@ -383,6 +391,7 @@ bookingRouter.get('/quotes/:id', (req: Request, res: Response, next: NextFunctio
 bookingRouter.post('/quotes/:id/issue', (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertQuoteProviderAccess(actor, req.params.id);
     const quote = bookingService.issueQuote(
       { actor_id: actor.actor_id, roles: actor.roles, name: `${actor.profile?.display_name || 'Advisor'}` },
       req.params.id
@@ -396,6 +405,7 @@ bookingRouter.post('/quotes/:id/issue', (req: Request, res: Response, next: Next
 bookingRouter.post('/quotes/:id/view', (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertQuoteCustomerAccess(actor, req.params.id);
     const quote = bookingService.viewQuote(
       { actor_id: actor.actor_id, roles: actor.roles, name: `${actor.profile?.display_name || 'Customer'}` },
       req.params.id
@@ -409,6 +419,7 @@ bookingRouter.post('/quotes/:id/view', (req: Request, res: Response, next: NextF
 bookingRouter.post('/quotes/:id/accept', (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertQuoteCustomerAccess(actor, req.params.id);
     const result = bookingService.acceptQuote(
       { actor_id: actor.actor_id, roles: actor.roles, name: `${actor.profile?.display_name || 'Customer'}` },
       req.params.id,
@@ -423,6 +434,7 @@ bookingRouter.post('/quotes/:id/accept', (req: Request, res: Response, next: Nex
 bookingRouter.post('/quotes/:id/reject', (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertQuoteCustomerAccess(actor, req.params.id);
     const quote = bookingService.rejectQuote(
       { actor_id: actor.actor_id, roles: actor.roles, name: `${actor.profile?.display_name || 'Customer'}` },
       req.params.id,
@@ -437,6 +449,7 @@ bookingRouter.post('/quotes/:id/reject', (req: Request, res: Response, next: Nex
 bookingRouter.post('/quotes/:id/revise', (req: Request, res: Response, next: NextFunction) => {
   try {
     const actor = getActor(req);
+    assertQuoteProviderAccess(actor, req.params.id);
     const revision = bookingService.reviseQuote(
       { actor_id: actor.actor_id, roles: actor.roles, name: `${actor.profile?.display_name || 'Advisor'}` },
       req.params.id,
