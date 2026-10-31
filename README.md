@@ -6,7 +6,7 @@ The repository implements the canonical Garage OS architecture through **GAR-DEV
 
 ## Current engineering baseline
 
-**Sprint 22 — Marketplace Foundation (GAR-021)**
+**Sprint 23 — Vehicle Compatibility & Fitment (GAR-022)**
 
 Implemented domains:
 
@@ -31,9 +31,9 @@ Implemented domains:
 - Car Care Center guidance, warning/symptom education, owner missions and contextual next-step routing
 - Personalized Car Care using owner-configured context and explainable deterministic rules
 - Trip Guardian journey preparation, readiness review, check-ins, consented location snapshots and explicit SOS/Roadside handoff
-- Automotive Marketplace storefronts, product catalog, listings, truthful inventory, price snapshots and buyer discovery
+- Contextual product × vehicle fitment, seller-vs-verified evidence, compatibility conflicts, My Car compatible-parts search and installation linkage
 
-The next product sprint is **Sprint 23 — Vehicle Compatibility & Fitment (GAR-022)**.
+The next product sprint is **Sprint 24 — Marketplace Transactions & Orders**.
 
 ## Architecture
 
@@ -48,7 +48,7 @@ The application is a TypeScript full-stack application:
 - WebSocket/SSE dispatch tracking
 - External integrations behind adapters
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/R1_SPRINT_1_TO_14_CERTIFICATION.md](docs/R1_SPRINT_1_TO_14_CERTIFICATION.md), and [docs/SPRINT_15_EMERGENCY_CIRCLE_CERTIFICATION.md](docs/SPRINT_15_EMERGENCY_CIRCLE_CERTIFICATION.md), plus [docs/SPRINT_16_SOS_ENGINE_CERTIFICATION.md](docs/SPRINT_16_SOS_ENGINE_CERTIFICATION.md) and [docs/SPRINT_17_TRUSTED_CONTACT_CERTIFICATION.md](docs/SPRINT_17_TRUSTED_CONTACT_CERTIFICATION.md), plus [docs/SPRINT_18_ACCIDENT_MANAGEMENT_CERTIFICATION.md](docs/SPRINT_18_ACCIDENT_MANAGEMENT_CERTIFICATION.md) and [docs/SPRINT_19_CAR_CARE_CENTER_CERTIFICATION.md](docs/SPRINT_19_CAR_CARE_CENTER_CERTIFICATION.md), plus [docs/SPRINT_20_PERSONALIZED_CAR_CARE_CERTIFICATION.md](docs/SPRINT_20_PERSONALIZED_CAR_CARE_CERTIFICATION.md) and [docs/SPRINT_21_TRIP_GUARDIAN_FOUNDATION_CERTIFICATION.md](docs/SPRINT_21_TRIP_GUARDIAN_FOUNDATION_CERTIFICATION.md), plus [docs/SPRINT_22_MARKETPLACE_FOUNDATION_CERTIFICATION.md](docs/SPRINT_22_MARKETPLACE_FOUNDATION_CERTIFICATION.md).
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/R1_SPRINT_1_TO_14_CERTIFICATION.md](docs/R1_SPRINT_1_TO_14_CERTIFICATION.md), and [docs/SPRINT_15_EMERGENCY_CIRCLE_CERTIFICATION.md](docs/SPRINT_15_EMERGENCY_CIRCLE_CERTIFICATION.md), plus [docs/SPRINT_16_SOS_ENGINE_CERTIFICATION.md](docs/SPRINT_16_SOS_ENGINE_CERTIFICATION.md) and [docs/SPRINT_17_TRUSTED_CONTACT_CERTIFICATION.md](docs/SPRINT_17_TRUSTED_CONTACT_CERTIFICATION.md), plus [docs/SPRINT_18_ACCIDENT_MANAGEMENT_CERTIFICATION.md](docs/SPRINT_18_ACCIDENT_MANAGEMENT_CERTIFICATION.md) and [docs/SPRINT_19_CAR_CARE_CENTER_CERTIFICATION.md](docs/SPRINT_19_CAR_CARE_CENTER_CERTIFICATION.md), plus [docs/SPRINT_20_PERSONALIZED_CAR_CARE_CERTIFICATION.md](docs/SPRINT_20_PERSONALIZED_CAR_CARE_CERTIFICATION.md) and [docs/SPRINT_21_TRIP_GUARDIAN_FOUNDATION_CERTIFICATION.md](docs/SPRINT_21_TRIP_GUARDIAN_FOUNDATION_CERTIFICATION.md), plus [docs/SPRINT_22_MARKETPLACE_FOUNDATION_CERTIFICATION.md](docs/SPRINT_22_MARKETPLACE_FOUNDATION_CERTIFICATION.md) and [docs/SPRINT_23_VEHICLE_COMPATIBILITY_FITMENT_CERTIFICATION.md](docs/SPRINT_23_VEHICLE_COMPATIBILITY_FITMENT_CERTIFICATION.md).
 
 ## Local development
 
