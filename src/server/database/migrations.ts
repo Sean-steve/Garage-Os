@@ -4958,7 +4958,131 @@ export const MIGRATIONS: Migration[] = [
         DROP TABLE IF EXISTS marketplace_stores;
       `);
     },
-  },
+  },,
+  {
+    id: '024_vehicle_compatibility_fitment',
+    name: 'Vehicle Compatibility & Fitment Architecture (GAR-022)',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS marketplace_fitment_sources (
+          id TEXT PRIMARY KEY,
+          source_type TEXT NOT NULL,
+          display_name TEXT NOT NULL,
+          owner_organization_id TEXT REFERENCES organizations(id) ON DELETE SET NULL,
+          provider_key TEXT,
+          verification_authority INTEGER NOT NULL DEFAULT 0,
+          trust_rank INTEGER NOT NULL DEFAULT 50,
+          status TEXT NOT NULL DEFAULT 'ACTIVE',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          CHECK (source_type IN ('SELLER','MANUFACTURER','CATALOG_PROVIDER','GARAGE_VERIFIED','PLATFORM_CURATED')),
+          CHECK (verification_authority IN (0,1)),
+          CHECK (trust_rank BETWEEN 0 AND 100),
+          CHECK (status IN ('ACTIVE','PAUSED','RETIRED')),
+          UNIQUE(source_type, provider_key)
+        );
+        CREATE INDEX IF NOT EXISTS idx_fitment_sources_status
+          ON marketplace_fitment_sources(status, source_type, trust_rank DESC);
+
+        CREATE TABLE IF NOT EXISTS marketplace_product_fitment_rules (
+          id TEXT PRIMARY KEY,
+          product_id TEXT NOT NULL REFERENCES marketplace_products(id) ON DELETE CASCADE,
+          source_id TEXT REFERENCES marketplace_fitment_sources(id) ON DELETE SET NULL,
+          source_type TEXT NOT NULL,
+          rule_kind TEXT NOT NULL,
+          vehicle_make TEXT,
+          vehicle_model TEXT,
+          year_from INTEGER,
+          year_to INTEGER,
+          trim TEXT,
+          variant TEXT,
+          body_type TEXT,
+          engine_type TEXT,
+          fuel_type TEXT,
+          transmission TEXT,
+          drive_type TEXT,
+          evidence_reference TEXT,
+          evidence_summary TEXT,
+          verification_status TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'ACTIVE',
+          created_by TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          CHECK (source_type IN ('SELLER','MANUFACTURER','CATALOG_PROVIDER','GARAGE_VERIFIED','PLATFORM_CURATED')),
+          CHECK (rule_kind IN ('INCLUDE','EXCLUDE','GENERIC')),
+          CHECK (verification_status IN ('SELLER_ASSERTED','UNVERIFIED','VERIFIED')),
+          CHECK (status IN ('ACTIVE','REVOKED')),
+          CHECK (year_from IS NULL OR (year_from BETWEEN 1886 AND 2100)),
+          CHECK (year_to IS NULL OR (year_to BETWEEN 1886 AND 2100)),
+          CHECK (year_from IS NULL OR year_to IS NULL OR year_to >= year_from)
+        );
+        CREATE INDEX IF NOT EXISTS idx_fitment_rules_product
+          ON marketplace_product_fitment_rules(product_id, status, rule_kind);
+        CREATE INDEX IF NOT EXISTS idx_fitment_rules_vehicle
+          ON marketplace_product_fitment_rules(vehicle_make, vehicle_model, year_from, year_to, status);
+
+        CREATE TABLE IF NOT EXISTS marketplace_fitment_decisions (
+          id TEXT PRIMARY KEY,
+          product_id TEXT NOT NULL REFERENCES marketplace_products(id) ON DELETE CASCADE,
+          listing_id TEXT REFERENCES marketplace_listings(id) ON DELETE SET NULL,
+          vehicle_id TEXT NOT NULL REFERENCES vehicles(id) ON DELETE CASCADE,
+          decision_status TEXT NOT NULL,
+          confidence INTEGER NOT NULL,
+          matched_rule_ids_json TEXT NOT NULL DEFAULT '[]',
+          conflict_rule_ids_json TEXT NOT NULL DEFAULT '[]',
+          engine_version TEXT NOT NULL,
+          guaranteed INTEGER NOT NULL DEFAULT 0,
+          decision_reason TEXT NOT NULL,
+          evaluated_by TEXT NOT NULL,
+          evaluated_at TEXT NOT NULL,
+          CHECK (decision_status IN ('UNKNOWN','GENERIC','SELLER_CLAIMED','PROBABLE','CONFIRMED','CONFLICT','NOT_COMPATIBLE')),
+          CHECK (confidence BETWEEN 0 AND 100),
+          CHECK (guaranteed = 0)
+        );
+        CREATE INDEX IF NOT EXISTS idx_fitment_decisions_vehicle
+          ON marketplace_fitment_decisions(vehicle_id, evaluated_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_fitment_decisions_product
+          ON marketplace_fitment_decisions(product_id, vehicle_id, evaluated_at DESC);
+
+        CREATE TABLE IF NOT EXISTS marketplace_fitment_installations (
+          id TEXT PRIMARY KEY,
+          vehicle_id TEXT NOT NULL REFERENCES vehicles(id) ON DELETE CASCADE,
+          product_id TEXT NOT NULL REFERENCES marketplace_products(id) ON DELETE RESTRICT,
+          listing_id TEXT REFERENCES marketplace_listings(id) ON DELETE SET NULL,
+          vehicle_component_id TEXT REFERENCES vehicle_components(id) ON DELETE SET NULL,
+          fitment_decision_id TEXT REFERENCES marketplace_fitment_decisions(id) ON DELETE SET NULL,
+          fitment_status_at_install TEXT NOT NULL,
+          installation_source TEXT NOT NULL,
+          verification_status TEXT NOT NULL,
+          notes TEXT,
+          recorded_by TEXT NOT NULL,
+          installed_at TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          CHECK (fitment_status_at_install IN ('UNKNOWN','GENERIC','SELLER_CLAIMED','PROBABLE','CONFIRMED','CONFLICT','NOT_COMPATIBLE')),
+          CHECK (installation_source IN ('OWNER_RECORDED','GARAGE_RECORDED','SYSTEM_LINKED')),
+          CHECK (verification_status IN ('UNVERIFIED','PROVIDER_RECORDED','VERIFIED'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_fitment_installations_vehicle
+          ON marketplace_fitment_installations(vehicle_id, installed_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_fitment_installations_product
+          ON marketplace_fitment_installations(product_id, vehicle_id);
+
+        INSERT OR IGNORE INTO marketplace_fitment_sources
+          (id,source_type,display_name,owner_organization_id,provider_key,verification_authority,trust_rank,status,created_at,updated_at)
+        VALUES
+          ('fitsrc_platform','PLATFORM_CURATED','Garage OS Curated Fitment',NULL,'garage-os',1,100,'ACTIVE',
+           '2026-10-31T00:00:00.000Z','2026-10-31T00:00:00.000Z');
+      `);
+    },
+    down: (db) => {
+      db.exec(`
+        DROP TABLE IF EXISTS marketplace_fitment_installations;
+        DROP TABLE IF EXISTS marketplace_fitment_decisions;
+        DROP TABLE IF EXISTS marketplace_product_fitment_rules;
+        DROP TABLE IF EXISTS marketplace_fitment_sources;
+      `);
+    },
+  }
 ];
 
 /**
