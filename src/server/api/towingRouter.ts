@@ -40,34 +40,19 @@ import {
 export const towingRouter = Router();
 
 // Middleware: Authenticate actor context (with optional mode for local dev flexibility)
-towingRouter.use(authenticate({ optional: true }));
+// Towing operations are safety-sensitive and always require a canonical session.
+towingRouter.use(authenticate());
 
 function getActor(req: Request): TowActorContext & { actor_id: string; roles: string[] } {
-  if (req.actor) {
-    const roles: string[] = [];
-    if (req.actor.active_membership?.role) {
-      roles.push(req.actor.active_membership.role);
-    }
-    if (req.actor.platform_roles) {
-      roles.push(...req.actor.platform_roles);
-    }
-    return {
-      id: req.actor.user_id || req.actor.id,
-      actor_id: req.actor.user_id || req.actor.id,
-      name: req.actor.email?.split('@')[0] || 'Authenticated User',
-      roles,
-      provider_id: req.headers['x-provider-id'] as string | undefined,
-    };
-  }
-
-  // Fallback dev context
-  const providerIdHeader = req.headers['x-provider-id'] as string | undefined;
+  const roles: string[] = [];
+  if (req.actor!.active_membership?.role) roles.push(req.actor!.active_membership.role);
+  if (req.actor!.platform_roles) roles.push(...req.actor!.platform_roles);
   return {
-    id: providerIdHeader ? `usr_operator_${providerIdHeader}` : 'usr_dev_driver_01',
-    actor_id: providerIdHeader ? `usr_operator_${providerIdHeader}` : 'usr_dev_driver_01',
-    name: providerIdHeader ? 'Tow Operator' : 'Vehicle Owner',
-    roles: providerIdHeader ? ['TOW_OPERATOR', 'PROVIDER_STAFF'] : ['OWNER'],
-    provider_id: providerIdHeader,
+    id: req.actor!.user_id || req.actor!.id,
+    actor_id: req.actor!.user_id || req.actor!.id,
+    name: req.actor!.profile.display_name || req.actor!.email,
+    roles,
+    provider_id: req.headers['x-provider-id'] as string | undefined,
   };
 }
 
