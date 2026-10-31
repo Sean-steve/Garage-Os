@@ -4627,6 +4627,145 @@ export const MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    id: '022_trip_guardian_foundation',
+    name: 'Pre-Trip & Trip Guardian Foundation (GAR-019)',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS trip_guardian_journeys (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          vehicle_id TEXT NOT NULL REFERENCES vehicles(id) ON DELETE CASCADE,
+          status TEXT NOT NULL,
+          origin_label TEXT NOT NULL,
+          destination_label TEXT NOT NULL,
+          planned_departure_at TEXT,
+          expected_arrival_at TEXT,
+          purpose TEXT,
+          pretrip_mission_id TEXT NOT NULL REFERENCES vehicle_care_missions(id) ON DELETE RESTRICT,
+          location_sharing_enabled INTEGER NOT NULL DEFAULT 0,
+          checkins_enabled INTEGER NOT NULL DEFAULT 0,
+          checkin_interval_minutes INTEGER,
+          started_at TEXT,
+          arrived_at TEXT,
+          cancelled_at TEXT,
+          cancellation_reason TEXT,
+          start_warning_acknowledged_at TEXT,
+          start_warning_acknowledgement TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          CHECK (status IN ('PREPARED','IN_PROGRESS','ARRIVED','CANCELLED')),
+          CHECK (checkin_interval_minutes IS NULL OR (checkin_interval_minutes BETWEEN 15 AND 720))
+        );
+        CREATE INDEX IF NOT EXISTS idx_trip_guardian_journeys_user
+          ON trip_guardian_journeys(user_id, status, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_trip_guardian_journeys_vehicle
+          ON trip_guardian_journeys(vehicle_id, status, created_at DESC);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_trip_guardian_one_active_vehicle
+          ON trip_guardian_journeys(user_id, vehicle_id)
+          WHERE status = 'IN_PROGRESS';
+
+        CREATE TABLE IF NOT EXISTS trip_guardian_contact_shares (
+          id TEXT PRIMARY KEY,
+          journey_id TEXT NOT NULL REFERENCES trip_guardian_journeys(id) ON DELETE CASCADE,
+          contact_id TEXT NOT NULL REFERENCES emergency_contacts(id) ON DELETE RESTRICT,
+          share_journey_status INTEGER NOT NULL DEFAULT 1,
+          share_vehicle_summary INTEGER NOT NULL DEFAULT 1,
+          share_location_when_available INTEGER NOT NULL DEFAULT 0,
+          status TEXT NOT NULL DEFAULT 'CONFIGURED',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          UNIQUE(journey_id, contact_id),
+          CHECK (status IN ('CONFIGURED','REVOKED'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_trip_guardian_contact_shares_journey
+          ON trip_guardian_contact_shares(journey_id, status);
+
+        CREATE TABLE IF NOT EXISTS trip_guardian_checkins (
+          id TEXT PRIMARY KEY,
+          journey_id TEXT NOT NULL REFERENCES trip_guardian_journeys(id) ON DELETE CASCADE,
+          user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          status TEXT NOT NULL,
+          due_at TEXT NOT NULL,
+          prompted_at TEXT,
+          responded_at TEXT,
+          response TEXT,
+          response_notes TEXT,
+          missed_at TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          CHECK (status IN ('PENDING','RESPONDED','MISSED','CANCELLED')),
+          CHECK (response IS NULL OR response IN ('OKAY','DELAYED','NEED_HELP'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_trip_guardian_checkins_journey
+          ON trip_guardian_checkins(journey_id, due_at);
+        CREATE INDEX IF NOT EXISTS idx_trip_guardian_checkins_due
+          ON trip_guardian_checkins(status, due_at);
+
+        CREATE TABLE IF NOT EXISTS trip_guardian_location_snapshots (
+          id TEXT PRIMARY KEY,
+          journey_id TEXT NOT NULL REFERENCES trip_guardian_journeys(id) ON DELETE CASCADE,
+          user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          latitude REAL NOT NULL,
+          longitude REAL NOT NULL,
+          accuracy_meters REAL,
+          captured_at TEXT NOT NULL,
+          source_type TEXT NOT NULL DEFAULT 'USER_DEVICE',
+          purpose TEXT NOT NULL DEFAULT 'TRIP_GUARDIAN',
+          sharing_authorized INTEGER NOT NULL,
+          expires_at TEXT NOT NULL,
+          access_revoked_at TEXT,
+          created_at TEXT NOT NULL,
+          CHECK (latitude BETWEEN -90 AND 90),
+          CHECK (longitude BETWEEN -180 AND 180),
+          CHECK (accuracy_meters IS NULL OR accuracy_meters >= 0),
+          CHECK (source_type = 'USER_DEVICE'),
+          CHECK (purpose = 'TRIP_GUARDIAN')
+        );
+        CREATE INDEX IF NOT EXISTS idx_trip_guardian_location_journey
+          ON trip_guardian_location_snapshots(journey_id, captured_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_trip_guardian_location_expiry
+          ON trip_guardian_location_snapshots(expires_at, access_revoked_at);
+
+        CREATE TABLE IF NOT EXISTS trip_guardian_escalation_links (
+          id TEXT PRIMARY KEY,
+          journey_id TEXT NOT NULL REFERENCES trip_guardian_journeys(id) ON DELETE CASCADE,
+          escalation_type TEXT NOT NULL,
+          target_reference_id TEXT NOT NULL,
+          created_by TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          created_at TEXT NOT NULL,
+          UNIQUE(journey_id, escalation_type, target_reference_id),
+          CHECK (escalation_type IN ('SOS'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_trip_guardian_escalation_journey
+          ON trip_guardian_escalation_links(journey_id, created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS trip_guardian_status_history (
+          id TEXT PRIMARY KEY,
+          journey_id TEXT NOT NULL REFERENCES trip_guardian_journeys(id) ON DELETE CASCADE,
+          from_status TEXT,
+          to_status TEXT NOT NULL,
+          actor_id TEXT,
+          actor_type TEXT NOT NULL,
+          reason TEXT,
+          metadata_json TEXT,
+          occurred_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_trip_guardian_status_history_journey
+          ON trip_guardian_status_history(journey_id, occurred_at);
+      `);
+    },
+    down: (db) => {
+      db.exec(`
+        DROP TABLE IF EXISTS trip_guardian_status_history;
+        DROP TABLE IF EXISTS trip_guardian_escalation_links;
+        DROP TABLE IF EXISTS trip_guardian_location_snapshots;
+        DROP TABLE IF EXISTS trip_guardian_checkins;
+        DROP TABLE IF EXISTS trip_guardian_contact_shares;
+        DROP TABLE IF EXISTS trip_guardian_journeys;
+      `);
+    },
+  },
 ];
 
 /**
