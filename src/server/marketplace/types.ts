@@ -139,8 +139,8 @@ export interface MarketplaceListingDetail extends MarketplaceListingCard{
   truth:{
     fitment_confirmed:false;
     compatibility_status:'UNKNOWN';
-    checkout_available:false;
-    order_creation_available:false;
+    checkout_available:true;
+    order_creation_available:true;
     payment_available:false;
     authenticity_verified:false;
   };
