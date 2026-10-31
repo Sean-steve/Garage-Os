@@ -5382,6 +5382,109 @@ export const MIGRATIONS: Migration[] = [
         DROP TABLE IF EXISTS marketplace_payment_providers;
       `);
     },
+  },
+  {
+    id: '027_marketplace_fulfillment_delivery_returns',
+    name: 'Marketplace Fulfillment, Delivery & Returns (Sprint 26)',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS marketplace_fulfillments (
+          id TEXT PRIMARY KEY,
+          order_id TEXT UNIQUE NOT NULL REFERENCES marketplace_orders(id) ON DELETE RESTRICT,
+          store_id TEXT NOT NULL REFERENCES marketplace_stores(id) ON DELETE RESTRICT,
+          fulfillment_mode TEXT NOT NULL,
+          status TEXT NOT NULL,
+          carrier_name TEXT,
+          service_level TEXT,
+          tracking_reference TEXT,
+          seller_notes TEXT,
+          prepared_at TEXT,
+          ready_at TEXT,
+          dispatched_at TEXT,
+          delivery_reported_at TEXT,
+          completed_at TEXT,
+          created_by TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          CHECK (fulfillment_mode IN ('PICKUP','LOCAL_DELIVERY','SHIPPING')),
+          CHECK (status IN ('PREPARING','READY_FOR_HANDOFF','IN_TRANSIT','DELIVERY_REPORTED','COMPLETED','RETURN_IN_PROGRESS','RETURNED'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_fulfillments_store
+          ON marketplace_fulfillments(store_id,status,created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS marketplace_fulfillment_events (
+          id TEXT PRIMARY KEY,
+          fulfillment_id TEXT NOT NULL REFERENCES marketplace_fulfillments(id) ON DELETE CASCADE,
+          order_id TEXT NOT NULL REFERENCES marketplace_orders(id) ON DELETE RESTRICT,
+          event_type TEXT NOT NULL,
+          source_type TEXT NOT NULL,
+          actor_id TEXT NOT NULL,
+          details_json TEXT,
+          occurred_at TEXT NOT NULL,
+          CHECK (source_type IN ('SELLER_RECORDED','BUYER_CONFIRMED','SYSTEM_DERIVED'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_fulfillment_events
+          ON marketplace_fulfillment_events(fulfillment_id,occurred_at);
+
+        CREATE TABLE IF NOT EXISTS marketplace_returns (
+          id TEXT PRIMARY KEY,
+          return_number TEXT UNIQUE NOT NULL,
+          order_id TEXT NOT NULL REFERENCES marketplace_orders(id) ON DELETE RESTRICT,
+          fulfillment_id TEXT NOT NULL REFERENCES marketplace_fulfillments(id) ON DELETE RESTRICT,
+          buyer_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          store_id TEXT NOT NULL REFERENCES marketplace_stores(id) ON DELETE RESTRICT,
+          status TEXT NOT NULL,
+          reason TEXT NOT NULL,
+          seller_decision_reason TEXT,
+          return_tracking_reference TEXT,
+          refund_id TEXT UNIQUE REFERENCES marketplace_refunds(id) ON DELETE SET NULL,
+          requested_at TEXT NOT NULL,
+          reviewed_at TEXT,
+          shipped_at TEXT,
+          received_at TEXT,
+          completed_at TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          CHECK (status IN ('REQUESTED','APPROVED','REJECTED','IN_TRANSIT','RECEIVED','REFUND_REQUESTED','COMPLETED'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_returns_order
+          ON marketplace_returns(order_id,status,requested_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_marketplace_returns_store
+          ON marketplace_returns(store_id,status,requested_at DESC);
+
+        CREATE TABLE IF NOT EXISTS marketplace_return_items (
+          id TEXT PRIMARY KEY,
+          return_id TEXT NOT NULL REFERENCES marketplace_returns(id) ON DELETE CASCADE,
+          order_item_id TEXT NOT NULL REFERENCES marketplace_order_items(id) ON DELETE RESTRICT,
+          listing_id TEXT NOT NULL REFERENCES marketplace_listings(id) ON DELETE RESTRICT,
+          product_id TEXT NOT NULL REFERENCES marketplace_products(id) ON DELETE RESTRICT,
+          requested_quantity INTEGER NOT NULL,
+          received_quantity INTEGER NOT NULL DEFAULT 0,
+          restock_quantity INTEGER NOT NULL DEFAULT 0,
+          condition_at_return TEXT NOT NULL DEFAULT 'UNASSESSED',
+          unit_price_minor INTEGER NOT NULL,
+          refund_amount_minor INTEGER NOT NULL,
+          notes TEXT,
+          UNIQUE(return_id,order_item_id),
+          CHECK (requested_quantity BETWEEN 1 AND 999),
+          CHECK (received_quantity BETWEEN 0 AND requested_quantity),
+          CHECK (restock_quantity BETWEEN 0 AND received_quantity),
+          CHECK (condition_at_return IN ('UNASSESSED','RESTOCKABLE','OPENED','DAMAGED','DEFECTIVE')),
+          CHECK (unit_price_minor >= 0),
+          CHECK (refund_amount_minor >= 0)
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_return_items_order_item
+          ON marketplace_return_items(order_item_id);
+      `);
+    },
+    down: (db) => {
+      db.exec(`
+        DROP TABLE IF EXISTS marketplace_return_items;
+        DROP TABLE IF EXISTS marketplace_returns;
+        DROP TABLE IF EXISTS marketplace_fulfillment_events;
+        DROP TABLE IF EXISTS marketplace_fulfillments;
+      `);
+    },
   }
 ];
 
