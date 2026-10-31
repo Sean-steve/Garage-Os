@@ -241,6 +241,11 @@ describe('Towing & Recovery Architecture (GAR-015)', () => {
     const offerA = offers.find(o => o.provider_id === providerAId);
     assert.ok(offerA, 'Provider A must have received an offer');
     assert.equal(offerA!.status, TowOfferStatus.OFFERED);
+    assert.equal(
+      offerA!.estimated_price_minor,
+      null,
+      'Haversine/static matching must not manufacture a tow price'
+    );
 
     // C. Provider A accepts offer
     const assignment = await towingService.acceptOffer(
