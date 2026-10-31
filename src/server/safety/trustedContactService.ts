@@ -214,7 +214,20 @@ export class TrustedContactService {
     let vehicle: TrustedContactPortalView['vehicle'] = null;
     if (attempt.share_vehicle_summary && incident.vehicle_id) {
       const row = db.prepare(
-        'SELECT make, model, registration_number FROM vehicles WHERE id = ? LIMIT 1'
+        `SELECT
+          v.make,
+          v.model,
+          (
+            SELECT vi.value
+            FROM vehicle_identifiers vi
+            WHERE vi.vehicle_id = v.id
+              AND vi.type = 'REGISTRATION_NUMBER'
+            ORDER BY vi.is_primary DESC, vi.created_at DESC
+            LIMIT 1
+          ) AS registration_number
+        FROM vehicles v
+        WHERE v.id = ?
+        LIMIT 1`
       ).get(incident.vehicle_id) as {
         make?: string | null;
         model?: string | null;
