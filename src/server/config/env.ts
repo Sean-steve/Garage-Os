@@ -45,6 +45,8 @@ const EnvSchema = z.object({
   // Auth placeholders (GAR-003)
   JWT_SECRET: z.string().default('dev-insecure-secret-replace-in-production'),
   SESSION_TTL_SECONDS: z.coerce.number().default(86400),
+  TRUSTED_CONTACT_TOKEN_SECRET: z.string().optional(),
+  TRUSTED_CONTACT_TOKEN_TTL_MINUTES: z.coerce.number().int().min(15).max(1440).default(720),
 
   // Outbox & Jobs (GAR-035, GAR-036)
   OUTBOX_POLL_INTERVAL_MS: z.coerce.number().default(5000),
@@ -80,6 +82,12 @@ export function loadAndValidateConfig(): AppConfig {
   if (result.data.APP_ENV === 'production') {
     if (result.data.JWT_SECRET.includes('insecure') || result.data.JWT_SECRET.length < 32) {
       throw new Error('FATAL: Production mode requires a secure JWT_SECRET of at least 32 characters.');
+    }
+    if (
+      result.data.TRUSTED_CONTACT_TOKEN_SECRET &&
+      result.data.TRUSTED_CONTACT_TOKEN_SECRET.length < 32
+    ) {
+      throw new Error('FATAL: TRUSTED_CONTACT_TOKEN_SECRET must be at least 32 characters when configured in production.');
     }
   }
 
