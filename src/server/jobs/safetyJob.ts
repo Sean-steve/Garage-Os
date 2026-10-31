@@ -7,6 +7,7 @@ import {
   SOS_SAFETY_CHECK_TIMEOUT_JOB,
   sosService,
 } from '../safety/sosService';
+import { TRUSTED_CONTACT_ACCESS_EXPIRY_JOB, trustedContactService } from '../safety/trustedContactService';
 
 export function registerSafetyJobWorkers(): void {
   jobEngine.registerWorker(SOS_FINALIZE_ACTIVATION_JOB, async (payload: any, correlationId: string) => {
@@ -51,5 +52,13 @@ export function registerSafetyJobWorkers(): void {
     });
   });
 
-  logger.info('Registered Sprint 16 SOS & human-safety job workers');
+  jobEngine.registerWorker(TRUSTED_CONTACT_ACCESS_EXPIRY_JOB, async (_payload: any, correlationId: string) => {
+    const expired = trustedContactService.expireDueGrants();
+    logger.info('Trusted-contact access expiry processed', {
+      correlation_id: correlationId,
+      details: { expired },
+    });
+  });
+
+  logger.info('Registered Sprint 16-17 SOS, safety & trusted-contact workers');
 }
