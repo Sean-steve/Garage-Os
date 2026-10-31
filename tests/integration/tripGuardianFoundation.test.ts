@@ -109,7 +109,7 @@ describe('Trip Guardian Foundation (GAR-019 / Sprint 21)',()=>{
       symptom_description:'Brake pedal to floor with no brake response.'
     },owner.user_id);
     const enriched=issueService.getEnrichedIssue(issue.id);
-    assert.equal(enriched.requires_immediate_grounding,true);
+    assert.equal(enriched.next_recommended_action.action_type,'STOP_DRIVING_SAFETY_WARNING');
 
     const readiness=tripGuardianService.getReadiness(owner,aggregate.journey.id);
     assert.equal(readiness.level,'CANONICAL_STOP_DRIVING');
