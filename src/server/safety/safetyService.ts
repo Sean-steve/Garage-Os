@@ -100,7 +100,7 @@ export class SafetyService {
         sos_activation: true,
         trusted_contact_notification_orchestration: true,
         notification_delivery_provider_configured: false,
-        trusted_contact_portal: false,
+        trusted_contact_portal: true,
         live_location_streaming: false,
         automatic_escalation: false,
       },
