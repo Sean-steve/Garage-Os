@@ -181,7 +181,7 @@ describe('Trip Guardian Foundation (GAR-019 / Sprint 21)',()=>{
     tripGuardianService.start(owner,aggregate.journey.id,{acknowledge_readiness_warnings:true});
 
     const snapshot=tripGuardianService.recordLocation(owner,aggregate.journey.id,{
-      latitude:-1.286389,longitude:36.817223,accuracy_meters:8,captured_at:'2026-11-01T05:10:00.000Z'
+      latitude:-1.286389,longitude:36.817223,accuracy_meters:8
     });
     assert.equal(snapshot.sharing_authorized,true);
 
