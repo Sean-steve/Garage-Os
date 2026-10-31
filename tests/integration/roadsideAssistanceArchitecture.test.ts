@@ -207,6 +207,22 @@ describe('Roadside Assistance Core Architecture (GAR-014)', () => {
     assert.ok(offers.length >= 1, 'Should find at least 1 eligible provider');
     const offer = offers[0];
     assert.equal(offer.status, ProviderOfferStatus.OFFERED);
+    assert.equal(
+      offer.estimated_arrival_minutes,
+      null,
+      'Static/geodesic matching must not fabricate an ETA'
+    );
+    assert.equal(
+      offer.callout_charge_minor,
+      250000,
+      'Only the provider-configured callout may be exposed'
+    );
+    const offerMetadata = JSON.parse(offer.metadata_json || '{}');
+    assert.equal(offerMetadata.distance_type, 'GEODESIC_DISTANCE');
+    assert.equal(
+      offerMetadata.eta_status,
+      'UNAVAILABLE_UNTIL_ROUTED_OR_PROVIDER_CONFIRMED'
+    );
 
     // 4. Provider accepts offer
     const acceptResult = await roadsideService.respondToOffer(
@@ -446,7 +462,7 @@ describe('Roadside Assistance Core Architecture (GAR-014)', () => {
       incidentAgg.incident.id,
       {
         reason: 'Spare key retrieved by family member; no longer stranded',
-        notes: 'Technician was already en route; cancellation callout fee applies',
+        notes: 'Technician was already en route; cancellation recorded without invented fee',
       },
       driverActor
     );
@@ -454,10 +470,10 @@ describe('Roadside Assistance Core Architecture (GAR-014)', () => {
     assert.equal(cancelled.status, RoadsideIncidentStatus.CANCELLED);
     assert.ok(cancelled.cancelled_at);
 
-    // Check cancellation record has callout fee
+    // Roadside does not invent a cancellation fee without a canonical accepted policy/quote.
     const cancellationRec = roadsideRepository.getCancellation(incidentAgg.incident.id);
     assert.ok(cancellationRec);
-    assert.equal(cancellationRec.fee_incurred_minor, 200000); // 2,000 KES fee
+    assert.equal(cancellationRec.fee_incurred_minor, 0);
 
     // Check assignment is also cancelled
     const assign = roadsideRepository.getAssignmentById(assignment!.id);
