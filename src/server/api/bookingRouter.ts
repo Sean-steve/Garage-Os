@@ -22,8 +22,12 @@ import {
   MembershipStatus,
   OrganizationStatus,
   OrganizationType,
+  PlatformRole,
 } from '../identity/types';
 import { BookingStatus, QuoteStatus } from '../booking/types';
+import { canAccessProvider, assertProviderAccess } from '../dispatch/dispatchAuthorization';
+import { vehiclePolicy } from '../vehicle/vehiclePolicy';
+import { CanonicalPermission } from '../identity/rbac';
 
 export const bookingRouter = Router();
 
@@ -31,65 +35,63 @@ export const bookingRouter = Router();
 bookingRouter.use(authenticate());
 
 function getActor(req: Request): AuthenticatedActorContext & { actor_id: string; roles: string[] } {
-  if (req.actor) {
-    const roles: string[] = [];
-    if (req.actor.active_membership?.role) {
-      roles.push(req.actor.active_membership.role);
-    }
-    if (req.actor.platform_roles) {
-      roles.push(...req.actor.platform_roles);
-    }
-    return {
-      ...req.actor,
-      actor_id: req.actor.user_id || req.actor.id,
-      roles,
-    };
+  if (!req.actor) {
+    throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Authentication required', 401);
   }
 
-  // Fallback dev context (Customer / Member default)
+  const roles: string[] = [];
+  if (req.actor.active_membership?.role) roles.push(req.actor.active_membership.role);
+  if (req.actor.platform_roles) roles.push(...req.actor.platform_roles);
+
   return {
-    id: 'usr_dev_customer_01',
-    user_id: 'usr_dev_customer_01',
-    actor_id: 'usr_dev_customer_01',
-    session_id: 'sess_dev_cust_01',
-    email: 'customer@garage-os.local',
-    account_status: AccountStatus.ACTIVE,
-    platform_roles: [],
-    profile: {
-      user_id: 'usr_dev_customer_01',
-      display_name: 'Dev Customer',
-      first_name: 'Dev',
-      last_name: 'Customer',
-      preferred_language: 'en',
-      timezone: 'Africa/Nairobi',
-      country: 'KE',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    memberships: [
-      {
-        membership_id: 'mem_dev_cust_01',
-        organization_id: 'org_dev_cust_01',
-        organization_name: 'Customer Org',
-        organization_type: OrganizationType.GARAGE,
-        organization_status: OrganizationStatus.ACTIVE,
-        role: MembershipRole.OWNER,
-        status: MembershipStatus.ACTIVE,
-      },
-    ],
-    active_organization_id: 'org_dev_cust_01',
-    active_membership: {
-      membership_id: 'mem_dev_cust_01',
-      organization_id: 'org_dev_cust_01',
-      organization_name: 'Customer Org',
-      organization_type: OrganizationType.GARAGE,
-      organization_status: OrganizationStatus.ACTIVE,
-      role: MembershipRole.OWNER,
-      status: MembershipStatus.ACTIVE,
-      permissions: [],
-    },
-    roles: [MembershipRole.OWNER],
+    ...req.actor,
+    actor_id: req.actor.user_id || req.actor.id,
+    roles,
   };
+}
+
+function isPrivilegedBookingActor(actor: AuthenticatedActorContext): boolean {
+  return actor.platform_roles.some((role) =>
+    [PlatformRole.PLATFORM_ADMIN, PlatformRole.OPERATIONS, PlatformRole.SUPPORT_AGENT].includes(role)
+  );
+}
+
+function assertBookingReadAccess(actor: AuthenticatedActorContext, bookingId: string): void {
+  const booking = bookingService.getBooking(bookingId);
+  if (booking.customer_user_id === actor.id || isPrivilegedBookingActor(actor)) return;
+  if (canAccessProvider(actor, booking.provider_id)) return;
+  throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Booking access denied', 403);
+}
+
+function assertBookingCustomerAccess(actor: AuthenticatedActorContext, bookingId: string): void {
+  const booking = bookingService.getBooking(bookingId);
+  if (booking.customer_user_id === actor.id || isPrivilegedBookingActor(actor)) return;
+  throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Booking customer action denied', 403);
+}
+
+function assertBookingProviderAccess(actor: AuthenticatedActorContext, bookingId: string): void {
+  const booking = bookingService.getBooking(bookingId);
+  if (isPrivilegedBookingActor(actor) || canAccessProvider(actor, booking.provider_id)) return;
+  throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Booking provider action denied', 403);
+}
+
+function assertQuoteReadAccess(actor: AuthenticatedActorContext, quoteId: string): void {
+  const quote = bookingService.getQuote(quoteId);
+  if (quote.customer_user_id === actor.id || isPrivilegedBookingActor(actor)) return;
+  if (canAccessProvider(actor, quote.provider_id)) return;
+  throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Quote access denied', 403);
+}
+
+function assertQuoteCustomerAccess(actor: AuthenticatedActorContext, quoteId: string): void {
+  const quote = bookingService.getQuote(quoteId);
+  if (quote.customer_user_id === actor.id || isPrivilegedBookingActor(actor)) return;
+  throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Quote customer action denied', 403);
+}
+
+function assertQuoteProviderAccess(actor: AuthenticatedActorContext, quoteId: string): void {
+  const quote = bookingService.getQuote(quoteId);
+  if (isPrivilegedBookingActor(actor) || canAccessProvider(actor, quote.provider_id)) return;
+  throw new CanonicalAppError(ErrorCode.NOT_AUTHORIZED, 'Quote provider action denied', 403);
 }
 
 // ===========================================================================
