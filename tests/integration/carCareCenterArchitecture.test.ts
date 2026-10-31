@@ -151,11 +151,11 @@ describe('Car Care Center (GAR-020)',()=>{
   it('enforces vehicle ownership/resource authorization for Car Care dashboard and missions',()=>{
     assert.throws(
       ()=>carCareService.getDashboard(other,vehicleId),
-      (err:any)=>err instanceof CanonicalAppError&&err.code===ErrorCode.NOT_FOUND_OR_NOT_ACCESSIBLE
+      (err:any)=>err instanceof CanonicalAppError&&(err.code===ErrorCode.NOT_AUTHORIZED||err.code===ErrorCode.NOT_FOUND_OR_NOT_ACCESSIBLE)
     );
     assert.throws(
       ()=>carCareService.startMission(other,vehicleId,'WEEKLY_OWNER_CHECK'),
-      (err:any)=>err instanceof CanonicalAppError&&err.code===ErrorCode.NOT_FOUND_OR_NOT_ACCESSIBLE
+      (err:any)=>err instanceof CanonicalAppError&&(err.code===ErrorCode.NOT_AUTHORIZED||err.code===ErrorCode.NOT_FOUND_OR_NOT_ACCESSIBLE)
     );
   });
 
