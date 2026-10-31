@@ -4952,6 +4952,8 @@ export const MIGRATIONS: Migration[] = [
         DROP TABLE IF EXISTS marketplace_listing_media;
         DROP TABLE IF EXISTS marketplace_listings;
         DROP TABLE IF EXISTS marketplace_products;
+        DELETE FROM marketplace_categories WHERE parent_id IS NOT NULL;
+        DELETE FROM marketplace_categories WHERE parent_id IS NULL;
         DROP TABLE IF EXISTS marketplace_categories;
         DROP TABLE IF EXISTS marketplace_stores;
       `);
