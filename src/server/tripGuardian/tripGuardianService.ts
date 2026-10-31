@@ -11,6 +11,7 @@ import { recordAuditEvent } from '../security/audit';
 import { vehicleService } from '../vehicle/vehicleService';
 import { maintenanceService } from '../maintenance/maintenanceService';
 import { issueRepository } from '../issues/issueRepository';
+import { issueService } from '../issues/issueService';
 import { IssueSeverity } from '../issues/types';
 import { carCareService } from '../carCare/carCareService';
 import { safetyRepository } from '../safety/safetyRepository';
@@ -229,7 +230,11 @@ export class TripGuardianService {
     const mission=carCareService.getMission(actor,journey.vehicle_id,journey.pretrip_mission_id);
     const maintenance=maintenanceService.getVehicleMaintenanceStatus(journey.vehicle_id);
     const issues=issueRepository.listActiveIssuesForVehicle(journey.vehicle_id);
-    const grounding=issues.filter(i=>Boolean(i.requires_immediate_grounding));
+    const grounding=issues.filter(i=>{
+      try{
+        return issueService.getEnrichedIssue(i.id).next_recommended_action.action_type==='STOP_DRIVING_SAFETY_WARNING';
+      }catch{return false;}
+    });
     const critical=issues.filter(i=>i.severity===IssueSeverity.CRITICAL);
     let level:TripGuardianReadiness['level']='REVIEWED';
 
