@@ -429,6 +429,46 @@ export class TrustedContactService {
     return this.revokeIncidentGrants(incidentId, 'OWNER_REVOKED_TRUSTED_CONTACT_ACCESS');
   }
 
+  revokeGrantForNotificationAttempt(notificationAttemptId: string, reason: string): boolean {
+    const grant = trustedContactRepository.getGrantByNotificationAttempt(notificationAttemptId);
+    if (!grant || grant.status !== TrustedContactGrantStatus.ACTIVE) return false;
+
+    const now = getCurrentUtcIsoString();
+    withTransaction(({ db }) => {
+      trustedContactRepository.revokeGrant(grant.id, now);
+      trustedContactRepository.recordAccessAudit({
+        id: generateCanonicalId('tca'),
+        grant_id: grant.id,
+        incident_id: grant.incident_id,
+        contact_id: grant.contact_id,
+        action: 'ACCESS_GRANT_REVOKED',
+        metadata: { reason },
+        occurred_at: now,
+      });
+      enqueueOutboxEvent(
+        createCanonicalEventEnvelope({
+          type: 'safety.trusted_contact.access_grant.revoked',
+          producer: 'garage-os-safety',
+          correlation_id: grant.incident_id,
+          subject_ids: {
+            sos_incident: grant.incident_id,
+            emergency_contact: grant.contact_id,
+            trusted_contact_grant: grant.id,
+          },
+          actor_type: CanonicalActorType.SYSTEM_WORKER,
+          provenance_class: DataProvenanceClass.DERIVED_DETERMINISTIC,
+          payload: {
+            grant_id: grant.id,
+            incident_id: grant.incident_id,
+            reason,
+          },
+        }),
+        db
+      );
+    });
+    return true;
+  }
+
   revokeIncidentGrants(incidentId: string, reason: string): number {
     const now = getCurrentUtcIsoString();
     const grants = trustedContactRepository
