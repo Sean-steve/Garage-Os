@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldCheck, Cpu, Layers, Sliders, ListTree, Activity, Car, Clock, FileCheck, Wrench, AlertTriangle, Fuel } from 'lucide-react';
+import { ShieldCheck, Layers, Sliders, ListTree, Activity, Car, Clock, FileCheck, Wrench, AlertTriangle, Fuel, CalendarDays, Navigation } from 'lucide-react';
 import { ActiveTab } from '../types';
 
 interface HeaderProps {
@@ -19,6 +19,8 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'fuel', label: 'Fuel & TCO', icon: Fuel },
     { id: 'maintenance', label: 'Maintenance', icon: Wrench },
     { id: 'issues', label: 'Issues & Faults', icon: AlertTriangle },
+    { id: 'bookings', label: 'Service', icon: CalendarDays },
+    { id: 'mobility', label: 'Mobility', icon: Navigation },
     { id: 'timeline', label: 'Timeline', icon: Clock },
     { id: 'passport', label: 'Vehicle Passport', icon: FileCheck },
     { id: 'queues', label: 'Outbox & Jobs', icon: Activity },
