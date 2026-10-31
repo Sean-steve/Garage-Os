@@ -67,6 +67,25 @@ jobs:
             exit 1
           fi
 
+      - name: Dispatch truthfulness regression guard
+        shell: bash
+        run: |
+          if grep -E "eta_minutes[^\n]*(\|\|[[:space:]]*25|:[[:space:]]*25)|estimated_arrival_minutes[^\n]*25" \
+            src/server/roadside/roadsideService.ts \
+            src/server/dispatch/adapters/roadsideAdapter.ts \
+            src/server/dispatch/dispatchService.ts >/dev/null 2>&1; then
+            echo "Fabricated roadside ETA fallback detected."
+            exit 1
+          fi
+
+          if grep -E "350000|650000|let dist = 8\.5|unit_default" \
+            src/server/dispatch/adapters/roadsideAdapter.ts \
+            src/server/dispatch/adapters/towingAdapter.ts \
+            src/server/towing/matchingEngine.ts >/dev/null 2>&1; then
+            echo "Fabricated roadside/towing price, distance or unit fallback detected."
+            exit 1
+          fi
+
       - name: Typecheck
         run: bun run typecheck
 
