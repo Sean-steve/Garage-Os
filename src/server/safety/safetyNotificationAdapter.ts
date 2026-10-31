@@ -6,6 +6,7 @@
  */
 
 export interface SafetyNotificationRequest {
+  idempotency_key: string;
   channel: 'SMS' | 'EMAIL';
   destination: string;
   incident_id: string;
