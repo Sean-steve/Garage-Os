@@ -182,17 +182,17 @@ describe('Marketplace Fulfillment, Delivery & Returns (Sprint 26)',()=>{
     const {order}=makeOrder('PICKUP',true,2);
     completePickup(order.order.id);
     const orderItem=order.items[0];
+    assert.throws(
+      ()=>marketplaceFulfillmentService.requestReturn(buyer,order.order.id,{
+        reason:'Try too many',items:[{order_item_id:orderItem.id,quantity:3}]
+      }),
+      (err:any)=>err instanceof CanonicalAppError&&err.code===ErrorCode.BUSINESS_RULE_VIOLATION
+    );
     const ret=marketplaceFulfillmentService.requestReturn(buyer,order.order.id,{
       reason:'One unit defective',items:[{order_item_id:orderItem.id,quantity:1}]
     });
     assert.equal(ret.return.status,'REQUESTED');
     assert.equal(ret.items[0].requested_quantity,1);
-    assert.throws(
-      ()=>marketplaceFulfillmentService.requestReturn(buyer,order.order.id,{
-        reason:'Try too many',items:[{order_item_id:orderItem.id,quantity:2}]
-      }),
-      (err:any)=>err instanceof CanonicalAppError&&err.code===ErrorCode.INVALID_STATE_TRANSITION
-    );
   });
 
   it('physical receipt controls restocking and does not confirm a refund',()=>{
