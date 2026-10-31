@@ -2,11 +2,11 @@
 
 Garage OS is a **Vehicle Ownership, Automotive Service, Mobility Safety and Vehicle Intelligence Operating System**.
 
-The repository implements the canonical Garage OS architecture through **GAR-DEV-S18** and is governed by the GAR-000 technical constitution.
+The repository implements the canonical Garage OS architecture through **GAR-DEV-S19** and is governed by the GAR-000 technical constitution.
 
 ## Current engineering baseline
 
-**Sprint 18 — Accident Management (GAR-018)**
+**Sprint 19 — Car Care Center (GAR-020)**
 
 Implemented domains:
 
@@ -28,8 +28,9 @@ Implemented domains:
 - Durable SOS countdown, backend acknowledgement, notification-attempt truth states and safety checks
 - Scoped, expiring, revocable no-account trusted-contact portal with minimum-necessary incident projection
 - Accident capture, private evidence, towing/repair handoffs and controlled Vehicle Passport accident projection
+- Car Care Center guidance, warning/symptom education, owner missions and contextual next-step routing
 
-The next product sprint is **Sprint 19 — Car Care Center (GAR-020)**.
+The next product sprint is **Sprint 20 — Personalized Car Care (GAR-020)**.
 
 ## Architecture
 
@@ -44,7 +45,7 @@ The application is a TypeScript full-stack application:
 - WebSocket/SSE dispatch tracking
 - External integrations behind adapters
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/R1_SPRINT_1_TO_14_CERTIFICATION.md](docs/R1_SPRINT_1_TO_14_CERTIFICATION.md), and [docs/SPRINT_15_EMERGENCY_CIRCLE_CERTIFICATION.md](docs/SPRINT_15_EMERGENCY_CIRCLE_CERTIFICATION.md), plus [docs/SPRINT_16_SOS_ENGINE_CERTIFICATION.md](docs/SPRINT_16_SOS_ENGINE_CERTIFICATION.md) and [docs/SPRINT_17_TRUSTED_CONTACT_CERTIFICATION.md](docs/SPRINT_17_TRUSTED_CONTACT_CERTIFICATION.md), plus [docs/SPRINT_18_ACCIDENT_MANAGEMENT_CERTIFICATION.md](docs/SPRINT_18_ACCIDENT_MANAGEMENT_CERTIFICATION.md).
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/R1_SPRINT_1_TO_14_CERTIFICATION.md](docs/R1_SPRINT_1_TO_14_CERTIFICATION.md), and [docs/SPRINT_15_EMERGENCY_CIRCLE_CERTIFICATION.md](docs/SPRINT_15_EMERGENCY_CIRCLE_CERTIFICATION.md), plus [docs/SPRINT_16_SOS_ENGINE_CERTIFICATION.md](docs/SPRINT_16_SOS_ENGINE_CERTIFICATION.md) and [docs/SPRINT_17_TRUSTED_CONTACT_CERTIFICATION.md](docs/SPRINT_17_TRUSTED_CONTACT_CERTIFICATION.md), plus [docs/SPRINT_18_ACCIDENT_MANAGEMENT_CERTIFICATION.md](docs/SPRINT_18_ACCIDENT_MANAGEMENT_CERTIFICATION.md) and [docs/SPRINT_19_CAR_CARE_CENTER_CERTIFICATION.md](docs/SPRINT_19_CAR_CARE_CENTER_CERTIFICATION.md).
 
 ## Local development
 
