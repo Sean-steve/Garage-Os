@@ -336,8 +336,8 @@ export class MarketplaceRepository {
       warranty_summary:p.warranty_summary?String(p.warranty_summary):null,
       media:this.listMedia(listingId),
       truth:{
-        fitment_confirmed:false,compatibility_status:'UNKNOWN',checkout_available:false,
-        order_creation_available:false,payment_available:false,authenticity_verified:false
+        fitment_confirmed:false,compatibility_status:'UNKNOWN',checkout_available:true,
+        order_creation_available:true,payment_available:false,authenticity_verified:false
       }
     };
   }
