@@ -14,6 +14,7 @@ import { enqueueOutboxEvent } from '../events/outbox';
 import { createCanonicalEventEnvelope } from '../events/envelope';
 import { CanonicalActorType } from '../../shared/types';
 import { getCurrentUtcIsoString } from '../domain/time';
+import { generateCanonicalId } from '../domain/id';
 import {
   TimelineFilterQueryDTO,
   TimelineCursorPaginatedResultDTO,
@@ -29,9 +30,124 @@ import {
   PassportShareScope,
   PassportShareGrantEntity,
   TimelineVerificationStatus,
+  CreateTimelineEntryDTO,
+  TimelineVisibility,
+  TimelineSensitivity,
 } from './types';
 
 export class TimelineService {
+  /**
+   * Internal cross-domain projection boundary.
+   *
+   * Source domains may project a controlled, privacy-reviewed record into the
+   * canonical vehicle timeline through this service rather than writing timeline
+   * tables directly. The source_event_id is the idempotency key.
+   */
+  projectDomainRecord(
+    actor: AuthenticatedActorContext,
+    vehicleId: string,
+    dto: CreateTimelineEntryDTO
+  ): VehicleTimelineEntryEntity {
+    vehiclePolicy.assertVehicleAccess(actor, vehicleId, CanonicalPermission.VEHICLE_TIMELINE_READ);
+
+    if (!dto.source_event_id || !dto.source_event_id.trim()) {
+      throw new CanonicalAppError(
+        ErrorCode.VALIDATION_ERROR,
+        'Domain timeline projections require source_event_id for idempotency',
+        400
+      );
+    }
+
+    const existing = timelineRepository.getTimelineEntryBySourceEventId(dto.source_event_id.trim());
+    if (existing) {
+      if (existing.vehicle_id !== vehicleId) {
+        throw new CanonicalAppError(
+          ErrorCode.CONFLICT,
+          'Timeline source event is already bound to another vehicle',
+          409
+        );
+      }
+      return existing;
+    }
+
+    const now = getCurrentUtcIsoString();
+    const entry: VehicleTimelineEntryEntity = {
+      id: generateCanonicalId('vte'),
+      vehicle_id: vehicleId,
+      entry_type: dto.entry_type,
+      category: dto.category,
+      occurred_at: dto.occurred_at,
+      recorded_at: now,
+      title: dto.title.trim(),
+      summary: dto.summary.trim(),
+      source_type: dto.source_type,
+      source_reference_type: dto.source_reference_type || 'DOMAIN_RECORD',
+      source_reference_id: dto.source_reference_id || null,
+      source_event_id: dto.source_event_id.trim(),
+      actor_type: dto.actor_type || actor.type || CanonicalActorType.VEHICLE_OWNER,
+      actor_id: dto.actor_id || actor.user_id,
+      organization_id: dto.organization_id || actor.active_organization_id || null,
+      verification_status: dto.verification_status || TimelineVerificationStatus.OWNER_ASSERTED,
+      confidence: dto.confidence ?? null,
+      odometer_value: dto.odometer_value ?? null,
+      odometer_unit: dto.odometer_unit || null,
+      location_reference: dto.location_reference || null,
+      visibility: dto.visibility || TimelineVisibility.PASSPORT_SHARED,
+      sensitivity: dto.sensitivity || TimelineSensitivity.SENSITIVE,
+      supersedes_timeline_entry_id: null,
+      corrected_by_timeline_entry_id: null,
+      is_active: true,
+      metadata: dto.metadata || {},
+      created_at: now,
+      updated_at: now,
+    };
+
+    const inserted = timelineRepository.insertTimelineEntry(entry);
+    if (!inserted) {
+      const deduped = timelineRepository.getTimelineEntryBySourceEventId(dto.source_event_id.trim());
+      if (deduped) return deduped;
+      throw new CanonicalAppError(ErrorCode.CONFLICT, 'Timeline projection could not be persisted', 409);
+    }
+
+    passportBuilder.buildPassport(vehicleId);
+
+    recordAuditEvent({
+      actor_id: actor.user_id,
+      actor_type: actor.type || CanonicalActorType.VEHICLE_OWNER,
+      action: 'VEHICLE_TIMELINE_DOMAIN_RECORD_PROJECTED',
+      resource_type: 'vehicle_timeline_entry',
+      resource_id: entry.id,
+      correlation_id: dto.source_event_id.trim(),
+      source: 'timeline-domain',
+      metadata: {
+        vehicle_id: vehicleId,
+        source_reference_type: entry.source_reference_type,
+        source_reference_id: entry.source_reference_id,
+        category: entry.category,
+      },
+    });
+
+    enqueueOutboxEvent(
+      createCanonicalEventEnvelope({
+        type: 'vehicle.timeline.domain_record.projected',
+        producer: 'timeline-domain',
+        actor_id: actor.user_id,
+        actor_type: actor.type || CanonicalActorType.VEHICLE_OWNER,
+        subject_ids: { vehicle: vehicleId, timeline_entry: entry.id },
+        correlation_id: dto.source_event_id.trim(),
+        payload: {
+          vehicle_id: vehicleId,
+          timeline_entry_id: entry.id,
+          source_reference_type: entry.source_reference_type,
+          source_reference_id: entry.source_reference_id,
+          category: entry.category,
+        },
+      })
+    );
+
+    return entry;
+  }
+
   /**
    * Retrieves paginated timeline entries for a vehicle.
    */

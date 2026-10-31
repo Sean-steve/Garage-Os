@@ -21,6 +21,7 @@ import { BentoDomainConsole } from './client/components/BentoDomainConsole';
 import { LoginGate } from './client/components/LoginGate';
 import { BentoSafety } from './client/components/BentoSafety';
 import { TrustedContactPortal } from './client/components/TrustedContactPortal';
+import { BentoAccidents } from './client/components/BentoAccidents';
 import {
   ActiveTab,
   PlatformCapabilities,
@@ -408,6 +409,17 @@ export default function App() {
         {activeTab === 'towing' && <BentoDomainConsole mode="towing" />}
         {activeTab === 'dispatch' && <BentoDomainConsole mode="dispatch" />}
         {activeTab === 'safety' && <BentoSafety />}
+        {activeTab === 'accidents' && (
+          <BentoAccidents
+            vehicles={vehicles}
+            selectedVehicleId={selectedVehicleId}
+            onSelectVehicle={setSelectedVehicleId}
+            onNotify={(msg) => {
+              setActionStatus(msg);
+              setTimeout(() => setActionStatus(null), 4000);
+            }}
+          />
+        )}
 
         {activeTab === 'queues' && (
           <BentoQueues

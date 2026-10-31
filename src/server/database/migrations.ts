@@ -4163,6 +4163,184 @@ export const MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    id: '019_accident_management',
+    name: 'Accident Management (GAR-018)',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS accident_incidents (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          vehicle_id TEXT NOT NULL REFERENCES vehicles(id) ON DELETE RESTRICT,
+          status TEXT NOT NULL DEFAULT 'DRAFT',
+          incident_type TEXT NOT NULL,
+          severity TEXT NOT NULL DEFAULT 'UNKNOWN',
+          occurred_at TEXT NOT NULL,
+          recorded_at TEXT NOT NULL,
+          summary TEXT NOT NULL,
+          location_label TEXT,
+          latitude REAL,
+          longitude REAL,
+          location_accuracy_meters REAL,
+          location_sharing_authorized INTEGER NOT NULL DEFAULT 0,
+          police_attended TEXT NOT NULL DEFAULT 'UNKNOWN',
+          injuries_reported TEXT NOT NULL DEFAULT 'UNKNOWN',
+          vehicle_drivable TEXT NOT NULL DEFAULT 'UNKNOWN',
+          timeline_entry_id TEXT,
+          version INTEGER NOT NULL DEFAULT 1,
+          finalized_at TEXT,
+          closed_at TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          CHECK (status IN ('DRAFT', 'RECORDED', 'REPAIR_IN_PROGRESS', 'CLOSED')),
+          CHECK (severity IN ('UNKNOWN', 'MINOR', 'MODERATE', 'MAJOR', 'TOTAL_LOSS_REPORTED')),
+          CHECK (police_attended IN ('UNKNOWN', 'YES', 'NO')),
+          CHECK (injuries_reported IN ('UNKNOWN', 'YES', 'NO')),
+          CHECK (vehicle_drivable IN ('UNKNOWN', 'YES', 'NO')),
+          CHECK (latitude IS NULL OR latitude BETWEEN -90 AND 90),
+          CHECK (longitude IS NULL OR longitude BETWEEN -180 AND 180)
+        );
+        CREATE INDEX IF NOT EXISTS idx_accidents_user_created
+          ON accident_incidents(user_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_accidents_vehicle_occurred
+          ON accident_incidents(vehicle_id, occurred_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_accidents_status
+          ON accident_incidents(status, created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS accident_participants (
+          id TEXT PRIMARY KEY,
+          accident_id TEXT NOT NULL REFERENCES accident_incidents(id) ON DELETE CASCADE,
+          participant_type TEXT NOT NULL,
+          display_label TEXT NOT NULL,
+          name TEXT,
+          phone TEXT,
+          email TEXT,
+          vehicle_registration TEXT,
+          vehicle_make TEXT,
+          vehicle_model TEXT,
+          insurer_name TEXT,
+          policy_reference TEXT,
+          notes TEXT,
+          created_at TEXT NOT NULL,
+          CHECK (participant_type IN ('OTHER_DRIVER', 'PASSENGER', 'PEDESTRIAN', 'CYCLIST', 'PROPERTY_OWNER', 'OTHER'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_accident_participants_accident
+          ON accident_participants(accident_id, created_at);
+
+        CREATE TABLE IF NOT EXISTS accident_witnesses (
+          id TEXT PRIMARY KEY,
+          accident_id TEXT NOT NULL REFERENCES accident_incidents(id) ON DELETE CASCADE,
+          name TEXT NOT NULL,
+          phone TEXT,
+          email TEXT,
+          notes TEXT,
+          consent_to_contact TEXT NOT NULL DEFAULT 'UNKNOWN',
+          created_at TEXT NOT NULL,
+          CHECK (consent_to_contact IN ('UNKNOWN', 'YES', 'NO'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_accident_witnesses_accident
+          ON accident_witnesses(accident_id, created_at);
+
+        CREATE TABLE IF NOT EXISTS accident_damage_observations (
+          id TEXT PRIMARY KEY,
+          accident_id TEXT NOT NULL REFERENCES accident_incidents(id) ON DELETE CASCADE,
+          vehicle_area TEXT NOT NULL,
+          severity TEXT NOT NULL DEFAULT 'UNKNOWN',
+          description TEXT NOT NULL,
+          source_type TEXT NOT NULL DEFAULT 'OWNER_OBSERVATION',
+          created_at TEXT NOT NULL,
+          CHECK (severity IN ('UNKNOWN', 'COSMETIC', 'MINOR', 'MODERATE', 'SEVERE')),
+          CHECK (source_type IN ('OWNER_OBSERVATION', 'PROVIDER_OBSERVATION', 'EXTERNAL_DOCUMENT'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_accident_damage_accident
+          ON accident_damage_observations(accident_id, created_at);
+
+        CREATE TABLE IF NOT EXISTS accident_evidence (
+          id TEXT PRIMARY KEY,
+          accident_id TEXT NOT NULL REFERENCES accident_incidents(id) ON DELETE CASCADE,
+          file_id TEXT NOT NULL REFERENCES file_objects(id) ON DELETE RESTRICT,
+          evidence_type TEXT NOT NULL,
+          description TEXT,
+          captured_at TEXT,
+          source_type TEXT NOT NULL DEFAULT 'OWNER_PROVIDED',
+          privacy_class TEXT NOT NULL DEFAULT 'PRIVATE',
+          created_at TEXT NOT NULL,
+          UNIQUE(accident_id, file_id),
+          CHECK (evidence_type IN ('SCENE_PHOTO', 'VEHICLE_PHOTO', 'OTHER_VEHICLE_PHOTO', 'DOCUMENT', 'VIDEO', 'AUDIO', 'OTHER')),
+          CHECK (source_type IN ('OWNER_PROVIDED', 'PROVIDER_PROVIDED', 'EXTERNAL_DOCUMENT')),
+          CHECK (privacy_class IN ('PRIVATE', 'SHAREABLE_INCIDENT_EVIDENCE'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_accident_evidence_accident
+          ON accident_evidence(accident_id, created_at);
+
+        CREATE TABLE IF NOT EXISTS accident_external_references (
+          id TEXT PRIMARY KEY,
+          accident_id TEXT NOT NULL REFERENCES accident_incidents(id) ON DELETE CASCADE,
+          reference_type TEXT NOT NULL,
+          provider_name TEXT,
+          reference_number TEXT NOT NULL,
+          verification_status TEXT NOT NULL DEFAULT 'OWNER_REPORTED',
+          notes TEXT,
+          created_at TEXT NOT NULL,
+          CHECK (reference_type IN ('POLICE_REFERENCE', 'INSURANCE_CLAIM', 'INSPECTION_REFERENCE', 'LEGAL_REFERENCE', 'OTHER')),
+          CHECK (verification_status IN ('OWNER_REPORTED', 'DOCUMENT_SUPPORTED', 'EXTERNAL_VERIFIED'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_accident_external_refs_accident
+          ON accident_external_references(accident_id, created_at);
+
+        CREATE TABLE IF NOT EXISTS accident_handoffs (
+          id TEXT PRIMARY KEY,
+          accident_id TEXT NOT NULL REFERENCES accident_incidents(id) ON DELETE CASCADE,
+          handoff_type TEXT NOT NULL,
+          target_reference_id TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'LINKED',
+          notes TEXT,
+          created_at TEXT NOT NULL,
+          CHECK (handoff_type IN ('TOW_REQUEST', 'ROADSIDE_INCIDENT', 'SERVICE_CASE', 'BOOKING')),
+          CHECK (status IN ('LINKED', 'SUPERSEDED', 'CANCELLED'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_accident_handoffs_accident
+          ON accident_handoffs(accident_id, created_at);
+
+        CREATE TABLE IF NOT EXISTS accident_addenda (
+          id TEXT PRIMARY KEY,
+          accident_id TEXT NOT NULL REFERENCES accident_incidents(id) ON DELETE CASCADE,
+          author_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          addendum_type TEXT NOT NULL DEFAULT 'OWNER_NOTE',
+          text TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          CHECK (addendum_type IN ('OWNER_NOTE', 'CORRECTION_NOTE', 'REPAIR_UPDATE', 'EXTERNAL_REFERENCE_UPDATE'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_accident_addenda_accident
+          ON accident_addenda(accident_id, created_at);
+
+        CREATE TABLE IF NOT EXISTS accident_status_history (
+          id TEXT PRIMARY KEY,
+          accident_id TEXT NOT NULL REFERENCES accident_incidents(id) ON DELETE CASCADE,
+          from_status TEXT,
+          to_status TEXT NOT NULL,
+          actor_id TEXT NOT NULL,
+          reason TEXT,
+          occurred_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_accident_status_history
+          ON accident_status_history(accident_id, occurred_at);
+      `);
+    },
+    down: (db) => {
+      db.exec(`
+        DROP TABLE IF EXISTS accident_status_history;
+        DROP TABLE IF EXISTS accident_addenda;
+        DROP TABLE IF EXISTS accident_handoffs;
+        DROP TABLE IF EXISTS accident_external_references;
+        DROP TABLE IF EXISTS accident_evidence;
+        DROP TABLE IF EXISTS accident_damage_observations;
+        DROP TABLE IF EXISTS accident_witnesses;
+        DROP TABLE IF EXISTS accident_participants;
+        DROP TABLE IF EXISTS accident_incidents;
+      `);
+    },
+  },
 ];
 
 /**

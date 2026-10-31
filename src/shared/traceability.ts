@@ -616,3 +616,57 @@ export const SPRINT_17_TRACEABILITY_MATRIX: TraceabilityItem[] = [
     notes: 'Trusted contacts can use no-account, scoped, expiring and revocable links. Portal responses never mutate professional assistance/dispatch state. Automatic escalation remains deferred.',
   },
 ];
+
+
+/**
+ * Sprint 18 — Accident Management (GAR-018).
+ */
+export const SPRINT_18_TRACEABILITY_MATRIX: TraceabilityItem[] = [
+  {
+    requirement_id: 'GAR-DEV-S18',
+    source: 'GAR-018/GAR-005/GAR-014/GAR-015/GAR-038/GAR-039/GAR-040/GAR-049',
+    title: 'Accident Management',
+    criticality: 'LAUNCH_CRITICAL',
+    status: 'VERIFIED',
+    implementation_refs: [
+      'src/server/accident/types.ts',
+      'src/server/accident/accidentRepository.ts',
+      'src/server/accident/accidentService.ts',
+      'src/server/api/accidentRouter.ts',
+      'src/client/components/BentoAccidents.tsx',
+      'src/server/timeline/timelineService.ts',
+    ],
+    schema_refs: [
+      'accident_incidents',
+      'accident_participants',
+      'accident_witnesses',
+      'accident_damage_observations',
+      'accident_evidence',
+      'accident_external_references',
+      'accident_handoffs',
+      'accident_addenda',
+      'accident_status_history',
+    ],
+    api_event_refs: [
+      'GET/POST /api/v1/accidents',
+      'GET /api/v1/accidents/:id',
+      'PATCH /api/v1/accidents/:id/draft',
+      'POST /api/v1/accidents/:id/finalize',
+      'POST /api/v1/accidents/:id/participants',
+      'POST /api/v1/accidents/:id/witnesses',
+      'POST /api/v1/accidents/:id/damage-observations',
+      'POST /api/v1/accidents/:id/evidence',
+      'POST /api/v1/accidents/:id/external-references',
+      'POST /api/v1/accidents/:id/handoffs',
+      'POST /api/v1/accidents/:id/addenda',
+      'POST /api/v1/accidents/:id/close',
+      'accident.draft.created',
+      'accident.recorded',
+      'vehicle.timeline.domain_record.projected',
+    ],
+    ui_refs: ['src/client/components/BentoAccidents.tsx'],
+    test_refs: ['tests/integration/accidentManagementArchitecture.test.ts'],
+    ops_refs: ['audit_events', 'outbox_events', 'file_objects'],
+    notes: 'Accident Passport projection is deliberately minimum-necessary and excludes participants, witnesses, exact location, injury reports, external reference numbers and raw evidence. Police/insurance integrations remain adapters for later sprints.',
+  },
+];
