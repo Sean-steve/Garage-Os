@@ -504,6 +504,16 @@ export class SosService {
       );
     });
 
+    if (
+      status === SosNotificationStatus.FAILED ||
+      status === SosNotificationStatus.NOT_CONFIGURED
+    ) {
+      trustedContactService.revokeGrantForNotificationAttempt(
+        attemptId,
+        `NOTIFICATION_${status}`
+      );
+    }
+
     this.refreshNotificationState(incident.id, now);
     return sosRepository.getNotificationAttempt(attemptId);
   }
