@@ -557,7 +557,7 @@ export class SafetyService {
       notes: [
         'Sprint 16 provides durable SOS activation and notification-attempt orchestration.',
         'Notification delivery is only confirmed when a configured provider returns authoritative delivery evidence.',
-        'Trusted-contact web access and automatic escalation remain unavailable until later safety sprints.',
+        'Trusted-contact temporary web access is available through scoped expiring links; automatic escalation remains unavailable.',
         'Failure to respond must never be treated as proof of injury.',
       ],
     };
