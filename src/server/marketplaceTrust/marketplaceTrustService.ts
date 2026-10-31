@@ -107,7 +107,7 @@ export class MarketplaceTrustService{
     if(review.status!=='PUBLISHED')throw new CanonicalAppError(ErrorCode.INVALID_STATE_TRANSITION,'Only published reviews can receive a public seller response',409);
     const now=getCurrentUtcIsoString();
     const existing=repo.getResponse(review.id);
-    const value={id:existing?.id||generateCanonicalId('mreviewresp'),review_id:review.id,store_id,
+    const value={id:existing?.id||generateCanonicalId('mreviewresp'),review_id:review.id,store_id:storeId,
       responder_user_id:actor.user_id,body:requiredText(input?.body,'body',3000),status:'PUBLISHED' as const,
       created_at:existing?.created_at||now,updated_at:now};
     const saved=repo.upsertResponse(value);
