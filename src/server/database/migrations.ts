@@ -3872,6 +3872,84 @@ export const MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    id: '016_emergency_circle_human_safety_foundation',
+    name: 'Emergency Circle & Human Safety Foundation (GAR-017)',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS emergency_contacts (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          display_name TEXT NOT NULL,
+          relationship_label TEXT,
+          phone_e164 TEXT,
+          email TEXT,
+          priority INTEGER NOT NULL DEFAULT 1,
+          status TEXT NOT NULL DEFAULT 'ACTIVE',
+          verification_status TEXT NOT NULL DEFAULT 'UNVERIFIED',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          revoked_at TEXT,
+          CHECK (priority >= 1),
+          CHECK (phone_e164 IS NOT NULL OR email IS NOT NULL)
+        );
+        CREATE INDEX IF NOT EXISTS idx_emergency_contacts_user_status
+          ON emergency_contacts(user_id, status, priority, created_at);
+
+        CREATE TABLE IF NOT EXISTS emergency_contact_scopes (
+          id TEXT PRIMARY KEY,
+          contact_id TEXT NOT NULL REFERENCES emergency_contacts(id) ON DELETE CASCADE,
+          incident_level TEXT NOT NULL,
+          notify_contact INTEGER NOT NULL DEFAULT 1,
+          share_incident_type INTEGER NOT NULL DEFAULT 1,
+          share_vehicle_summary INTEGER NOT NULL DEFAULT 1,
+          share_live_location INTEGER NOT NULL DEFAULT 0,
+          share_assistance_status INTEGER NOT NULL DEFAULT 1,
+          share_callback_number INTEGER NOT NULL DEFAULT 1,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          UNIQUE(contact_id, incident_level),
+          CHECK (incident_level IN ('ASSISTANCE', 'BREAKDOWN', 'SERIOUS_EMERGENCY'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_emergency_contact_scopes_contact
+          ON emergency_contact_scopes(contact_id, incident_level);
+
+        CREATE TABLE IF NOT EXISTS human_safety_preferences (
+          user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+          emergency_circle_enabled INTEGER NOT NULL DEFAULT 1,
+          allow_location_sharing INTEGER NOT NULL DEFAULT 0,
+          safety_check_enabled INTEGER NOT NULL DEFAULT 1,
+          safety_check_timeout_seconds INTEGER NOT NULL DEFAULT 120,
+          sos_cancel_countdown_seconds INTEGER NOT NULL DEFAULT 5,
+          escalation_sequence_enabled INTEGER NOT NULL DEFAULT 1,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          CHECK (safety_check_timeout_seconds BETWEEN 30 AND 3600),
+          CHECK (sos_cancel_countdown_seconds BETWEEN 3 AND 15)
+        );
+
+        CREATE TABLE IF NOT EXISTS safety_configuration_history (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          change_type TEXT NOT NULL,
+          subject_id TEXT,
+          summary_json TEXT NOT NULL,
+          actor_id TEXT NOT NULL REFERENCES users(id),
+          created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_safety_configuration_history_user
+          ON safety_configuration_history(user_id, created_at DESC);
+      `);
+    },
+    down: (db) => {
+      db.exec(`
+        DROP TABLE IF EXISTS safety_configuration_history;
+        DROP TABLE IF EXISTS human_safety_preferences;
+        DROP TABLE IF EXISTS emergency_contact_scopes;
+        DROP TABLE IF EXISTS emergency_contacts;
+      `);
+    },
+  },
 ];
 
 /**

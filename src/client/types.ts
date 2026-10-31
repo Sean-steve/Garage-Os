@@ -1,4 +1,4 @@
-export type ActiveTab = 'overview' | 'fuel' | 'maintenance' | 'issues' | 'timeline' | 'passport' | 'bookings' | 'providers' | 'workshop' | 'roadside' | 'towing' | 'dispatch' | 'queues' | 'flags' | 'audit' | 'traceability';
+export type ActiveTab = 'overview' | 'fuel' | 'maintenance' | 'issues' | 'timeline' | 'passport' | 'bookings' | 'providers' | 'workshop' | 'roadside' | 'towing' | 'dispatch' | 'safety' | 'queues' | 'flags' | 'audit' | 'traceability';
 
 export interface VehicleSummary {
   id: string;
