@@ -142,6 +142,15 @@ export class TripGuardianRepository {
     ).all(journeyId) as any[]).map(this.mapCheckIn);
   }
 
+  markCheckInPrompted(id:string,asOf:string):boolean{
+    const r=getDatabase().prepare(`
+      UPDATE trip_guardian_checkins
+      SET prompted_at=COALESCE(prompted_at,?),updated_at=?
+      WHERE id=? AND status='PENDING' AND due_at<=?
+    `).run(asOf,asOf,id,asOf);
+    return Number(r.changes||0)===1;
+  }
+
   respondCheckIn(id:string,userId:string,response:string,notes:string|null,now:string):boolean{
     const r=getDatabase().prepare(`
       UPDATE trip_guardian_checkins
