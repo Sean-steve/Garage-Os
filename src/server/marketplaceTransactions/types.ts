@@ -126,9 +126,16 @@ export interface MarketplaceOrderDetail{
     released_at:string|null;
   }>;
   truth:{
-    payment_captured:false;
-    payment_available:false;
-    seller_fulfillment_available:false;
+    payment_captured:boolean;
+    payment_available:boolean;
+    seller_fulfillment_available:boolean;
+  };
+  financial:{
+    commercial_status:'AWAITING_PAYMENT'|'PAYMENT_PENDING'|'PAYMENT_FAILED'|'PAID'|'PARTIALLY_REFUNDED'|'REFUNDED'|'CANCELLED';
+    captured_minor:number;
+    refunded_minor:number;
+    net_paid_minor:number;
+    latest_payment_intent_id:string|null;
   };
 }
 
