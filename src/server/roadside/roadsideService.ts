@@ -795,8 +795,10 @@ export class RoadsideService {
     const updatedOffer = roadsideRepository.updateProviderOffer(offerId, {
       status: ProviderOfferStatus.ACCEPTED,
       responded_at: now,
-      estimated_arrival_minutes: params?.eta_minutes || offer.estimated_arrival_minutes || 25,
-      callout_charge_minor: params?.callout_charge_minor || offer.callout_charge_minor,
+      estimated_arrival_minutes:
+        params?.eta_minutes ?? offer.estimated_arrival_minutes ?? null,
+      callout_charge_minor:
+        params?.callout_charge_minor ?? offer.callout_charge_minor,
     })!;
 
     // Create Assignment
@@ -813,7 +815,7 @@ export class RoadsideService {
       assigned_technician_phone: params?.assigned_technician_phone || null,
       assigned_vehicle_reg: params?.assigned_vehicle_reg || null,
       status: AssignmentStatus.ASSIGNED,
-      eta_minutes: params?.eta_minutes || offer.estimated_arrival_minutes || 25,
+      eta_minutes: params?.eta_minutes ?? offer.estimated_arrival_minutes ?? null,
       en_route_at: null,
       arrived_at: null,
       in_progress_at: null,
@@ -852,7 +854,10 @@ export class RoadsideService {
       actor_type: 'PROVIDER',
       actor_name: actorName,
       title: 'Roadside provider dispatched',
-      details: `Provider ID: ${offer.provider_id}, ETA: ${assignment.eta_minutes} mins`,
+      details:
+        assignment.eta_minutes != null
+          ? `Provider ID: ${offer.provider_id}, provider/routing ETA: ${assignment.eta_minutes} mins`
+          : `Provider ID: ${offer.provider_id}, ETA unavailable until routed/provider-confirmed`,
       created_at: now,
     });
 
@@ -1235,20 +1240,12 @@ export class RoadsideService {
     }
 
     const now = getCurrentUtcIsoString();
-    let feeIncurredMinor = 0;
+    // GAR-014/GAR-024 boundary: cancellation may be financially consequential later,
+    // but no fee is assessed unless an authoritative pricing/payment policy exists.
+    const feeIncurredMinor = 0;
 
-    // Check active assignment
     const activeAssignment = roadsideRepository.getActiveAssignment(incidentId);
     if (activeAssignment) {
-      // If already arrived or en route, callout fee applies
-      if (
-        activeAssignment.status === AssignmentStatus.EN_ROUTE ||
-        activeAssignment.status === AssignmentStatus.ARRIVED ||
-        activeAssignment.status === AssignmentStatus.IN_PROGRESS
-      ) {
-        feeIncurredMinor = 200000; // 2,000 KES cancellation fee
-      }
-
       roadsideRepository.updateAssignment(activeAssignment.id, {
         status: AssignmentStatus.CANCELLED,
         cancelled_at: now,
@@ -1293,7 +1290,7 @@ export class RoadsideService {
       actor_type: 'USER',
       actor_name: actorName,
       title: 'Roadside incident cancelled',
-      details: `Reason: ${params.reason}${feeIncurredMinor > 0 ? ` (Cancellation fee: ${feeIncurredMinor / 100} KES)` : ''}`,
+      details: `Reason: ${params.reason}; cancellation fee not assessed by Roadside domain`,
       created_at: now,
     });
 
@@ -1311,6 +1308,7 @@ export class RoadsideService {
           incident_id: incidentId,
           reason: params.reason,
           fee_incurred_minor: feeIncurredMinor,
+          fee_status: 'NOT_ASSESSED',
         },
       })
     );
