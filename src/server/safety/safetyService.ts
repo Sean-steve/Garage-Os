@@ -333,8 +333,8 @@ export class SafetyService {
         },
         db
       );
-    trustedContactService.revokeContactGrants(contactId);
     });
+    trustedContactService.revokeContactGrants(contactId);
   }
 
   updateContactScope(
