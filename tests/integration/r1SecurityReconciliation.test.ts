@@ -10,6 +10,8 @@ import {
   assertRealtimeTopicAccess,
 } from '../../src/server/dispatch/dispatchAuthorization';
 import { authenticate } from '../../src/server/api/authMiddleware';
+import { roadsideService } from '../../src/server/roadside/roadsideService';
+import { IncidentType } from '../../src/server/roadside/types';
 
 describe('Phase R1 security reconciliation', () => {
   beforeEach(() => {
@@ -66,6 +68,29 @@ describe('Phase R1 security reconciliation', () => {
     assert.ok(req.actor);
     assert.equal(req.actor.id, 'usr_seed_owner_01');
     assert.notEqual(req.actor.id, 'usr_seed_admin');
+  });
+
+  it('refuses roadside provider sourcing until a persisted triage exists', async () => {
+    const owner = authService.getActorContextById('usr_seed_owner_01');
+    assert.ok(owner);
+
+    const aggregate = await roadsideService.reportIncident(
+      {
+        vehicle_id: 'veh_seed_car_01',
+        incident_type: IncidentType.BATTERY_DEAD,
+        description: 'R1 triage gate regression fixture',
+        location: {
+          latitude: -1.286389,
+          longitude: 36.817223,
+        },
+      },
+      owner!
+    );
+
+    await assert.rejects(
+      () => roadsideService.requestAssistance(aggregate.incident.id, undefined, owner!),
+      (error: any) => error?.code === 'ROADSIDE_TRIAGE_REQUIRED'
+    );
   });
 
   it('requires signed evidence tokens at the file route boundary', () => {
