@@ -40,6 +40,7 @@ import { registerIssueFollowupJobWorkers } from './src/server/jobs/issueFollowup
 import { registerRecurringExpenseJobWorkers } from './src/server/jobs/recurringExpenseJob';
 import { registerBookingJobWorkers } from './src/server/jobs/bookingJob';
 import { registerSafetyJobWorkers } from './src/server/jobs/safetyJob';
+import { registerTripGuardianJobWorkers } from './src/server/jobs/tripGuardianJob';
 import { realtimeBus } from './src/server/dispatch/realtimeBus';
 import { dispatchWorker } from './src/server/dispatch/dispatchWorker';
 
@@ -144,6 +145,8 @@ async function bootstrapServer() {
 
   // Register SOS activation, notification and safety-check workers (Sprint 16)
   registerSafetyJobWorkers();
+  // Register Trip Guardian check-in and location-retention workers (Sprint 21)
+  registerTripGuardianJobWorkers();
 
   // Initialize Timeline Event Projector (GAR-005)
   timelineProjector.initialize();
