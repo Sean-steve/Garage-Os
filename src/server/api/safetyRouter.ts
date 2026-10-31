@@ -1,7 +1,8 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { authenticate } from './authMiddleware';
 import { safetyService } from '../safety/safetyService';
-import { SafetyIncidentLevel } from '../safety/types';
+import { SafetyIncidentLevel, SosSafetyCheckResponse } from '../safety/types';
+import { sosService } from '../safety/sosService';
 
 export const safetyRouter = Router();
 
@@ -85,5 +86,74 @@ safetyRouter.get('/readiness', (req: Request, res: Response, next: NextFunction)
   }
 });
 
-// Deliberately no /activate, /sos, /notify or trusted-contact access-token endpoints in Sprint 15.
-// Those capabilities belong to Sprint 16/17 and must not be represented as operational before then.
+// Sprint 16 — SOS Engine & Emergency Activation
+
+safetyRouter.post('/sos/attempts', (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const aggregate = sosService.initiate(req.actor!, req.body || {});
+    res.status(202).json({ success: true, data: aggregate });
+  } catch (err) {
+    next(err);
+  }
+});
+
+safetyRouter.get('/sos/active', (req: Request, res: Response, next: NextFunction) => {
+  try {
+    res.json({ success: true, data: sosService.getActive(req.actor!) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+safetyRouter.get('/sos/incidents', (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 50);
+    res.json({ success: true, data: sosService.getHistory(req.actor!, limit) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+safetyRouter.get('/sos/incidents/:id', (req: Request, res: Response, next: NextFunction) => {
+  try {
+    res.json({ success: true, data: sosService.getAggregateForOwner(req.actor!, req.params.id) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+safetyRouter.post('/sos/incidents/:id/cancel', (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const aggregate = sosService.cancel(req.actor!, req.params.id, req.body?.reason);
+    res.json({ success: true, data: aggregate });
+  } catch (err) {
+    next(err);
+  }
+});
+
+safetyRouter.post('/sos/incidents/:id/safety-check-response', (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const aggregate = sosService.respondSafetyCheck(
+      req.actor!,
+      req.params.id,
+      req.body?.response as SosSafetyCheckResponse,
+      req.body?.notes
+    );
+    res.json({ success: true, data: aggregate });
+  } catch (err) {
+    next(err);
+  }
+});
+
+safetyRouter.post('/sos/incidents/:id/close', (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const aggregate = sosService.close(req.actor!, req.params.id, req.body?.reason);
+    res.json({ success: true, data: aggregate });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// No external-emergency-service dispatch endpoint and no trusted-contact token
+// endpoint exist in Sprint 16. Provider dispatch, portal access and automatic
+// escalation must remain explicit later-sprint capabilities.

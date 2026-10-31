@@ -3950,6 +3950,160 @@ export const MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    id: '017_sos_engine_emergency_activation',
+    name: 'SOS Engine & Emergency Activation (GAR-017)',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS sos_incidents (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          vehicle_id TEXT REFERENCES vehicles(id) ON DELETE SET NULL,
+          incident_level TEXT NOT NULL DEFAULT 'SERIOUS_EMERGENCY',
+          incident_type TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'COUNTDOWN',
+          activation_source TEXT NOT NULL DEFAULT 'USER_SOS_BUTTON',
+          activation_attempted_at TEXT NOT NULL,
+          server_acknowledged_at TEXT NOT NULL,
+          cancel_deadline_at TEXT NOT NULL,
+          activated_at TEXT,
+          cancelled_at TEXT,
+          closed_at TEXT,
+          cancellation_reason TEXT,
+          closure_reason TEXT,
+          notification_state TEXT NOT NULL DEFAULT 'NOT_STARTED',
+          safety_check_state TEXT NOT NULL DEFAULT 'NOT_STARTED',
+          assistance_state TEXT NOT NULL DEFAULT 'NOT_REQUESTED',
+          version INTEGER NOT NULL DEFAULT 1,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          CHECK (incident_level IN ('ASSISTANCE', 'BREAKDOWN', 'SERIOUS_EMERGENCY')),
+          CHECK (status IN ('COUNTDOWN', 'ACTIVATED', 'CANCELLED', 'CLOSED'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_sos_incidents_user
+          ON sos_incidents(user_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_sos_incidents_status
+          ON sos_incidents(status, created_at DESC);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_sos_one_active_per_user
+          ON sos_incidents(user_id)
+          WHERE status IN ('COUNTDOWN', 'ACTIVATED');
+
+        CREATE TABLE IF NOT EXISTS sos_activation_attempts (
+          id TEXT PRIMARY KEY,
+          incident_id TEXT NOT NULL REFERENCES sos_incidents(id) ON DELETE CASCADE,
+          user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          attempt_number INTEGER NOT NULL DEFAULT 1,
+          client_requested_at TEXT,
+          server_received_at TEXT NOT NULL,
+          server_acknowledged_at TEXT NOT NULL,
+          activation_source TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'ACKNOWLEDGED',
+          created_at TEXT NOT NULL,
+          CHECK (status IN ('ACKNOWLEDGED', 'CANCELLED', 'ACTIVATED', 'FAILED'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_sos_activation_incident
+          ON sos_activation_attempts(incident_id, created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS sos_location_snapshots (
+          id TEXT PRIMARY KEY,
+          incident_id TEXT NOT NULL REFERENCES sos_incidents(id) ON DELETE CASCADE,
+          user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          latitude REAL NOT NULL,
+          longitude REAL NOT NULL,
+          accuracy_meters REAL,
+          captured_at TEXT NOT NULL,
+          purpose TEXT NOT NULL DEFAULT 'SOS_INITIAL_LOCATION',
+          source_type TEXT NOT NULL DEFAULT 'DEVICE_GPS',
+          sharing_authorized INTEGER NOT NULL DEFAULT 0,
+          expires_at TEXT NOT NULL,
+          access_revoked_at TEXT,
+          created_at TEXT NOT NULL,
+          CHECK (latitude BETWEEN -90 AND 90),
+          CHECK (longitude BETWEEN -180 AND 180)
+        );
+        CREATE INDEX IF NOT EXISTS idx_sos_location_incident
+          ON sos_location_snapshots(incident_id, captured_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_sos_location_expiry
+          ON sos_location_snapshots(expires_at);
+
+        CREATE TABLE IF NOT EXISTS sos_contact_notification_attempts (
+          id TEXT PRIMARY KEY,
+          incident_id TEXT NOT NULL REFERENCES sos_incidents(id) ON DELETE CASCADE,
+          contact_id TEXT NOT NULL REFERENCES emergency_contacts(id) ON DELETE RESTRICT,
+          priority INTEGER NOT NULL,
+          channel TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'QUEUED',
+          share_incident_type INTEGER NOT NULL DEFAULT 0,
+          share_vehicle_summary INTEGER NOT NULL DEFAULT 0,
+          share_live_location INTEGER NOT NULL DEFAULT 0,
+          share_assistance_status INTEGER NOT NULL DEFAULT 0,
+          share_callback_number INTEGER NOT NULL DEFAULT 0,
+          provider_name TEXT,
+          provider_message_id TEXT,
+          queued_at TEXT NOT NULL,
+          attempted_at TEXT,
+          provider_accepted_at TEXT,
+          delivered_at TEXT,
+          failed_at TEXT,
+          failure_code TEXT,
+          failure_message TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          CHECK (channel IN ('SMS', 'EMAIL')),
+          CHECK (status IN ('QUEUED', 'ATTEMPTED', 'PROVIDER_ACCEPTED', 'DELIVERED', 'FAILED', 'NOT_CONFIGURED', 'SKIPPED'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_sos_notification_incident
+          ON sos_contact_notification_attempts(incident_id, priority, queued_at);
+        CREATE INDEX IF NOT EXISTS idx_sos_notification_status
+          ON sos_contact_notification_attempts(status, queued_at);
+
+        CREATE TABLE IF NOT EXISTS sos_safety_checks (
+          id TEXT PRIMARY KEY,
+          incident_id TEXT NOT NULL REFERENCES sos_incidents(id) ON DELETE CASCADE,
+          user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          status TEXT NOT NULL DEFAULT 'PENDING',
+          prompted_at TEXT NOT NULL,
+          due_at TEXT NOT NULL,
+          responded_at TEXT,
+          response TEXT,
+          response_notes TEXT,
+          timed_out_at TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          CHECK (status IN ('PENDING', 'RESPONDED', 'TIMED_OUT')),
+          CHECK (response IS NULL OR response IN ('OKAY', 'NEED_HELP', 'CANNOT_CONFIRM'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_sos_safety_check_incident
+          ON sos_safety_checks(incident_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_sos_safety_check_due
+          ON sos_safety_checks(status, due_at);
+
+        CREATE TABLE IF NOT EXISTS sos_status_history (
+          id TEXT PRIMARY KEY,
+          incident_id TEXT NOT NULL REFERENCES sos_incidents(id) ON DELETE CASCADE,
+          from_status TEXT,
+          to_status TEXT NOT NULL,
+          actor_id TEXT,
+          actor_type TEXT,
+          reason TEXT,
+          metadata_json TEXT,
+          occurred_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_sos_status_history_incident
+          ON sos_status_history(incident_id, occurred_at ASC);
+      `);
+    },
+    down: (db) => {
+      db.exec(`
+        DROP TABLE IF EXISTS sos_status_history;
+        DROP TABLE IF EXISTS sos_safety_checks;
+        DROP TABLE IF EXISTS sos_contact_notification_attempts;
+        DROP TABLE IF EXISTS sos_location_snapshots;
+        DROP TABLE IF EXISTS sos_activation_attempts;
+        DROP TABLE IF EXISTS sos_incidents;
+      `);
+    },
+  },
 ];
 
 /**
