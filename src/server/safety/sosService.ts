@@ -14,6 +14,7 @@ import { vehicleService } from '../vehicle/vehicleService';
 import { safetyRepository } from './safetyRepository';
 import { sosRepository } from './sosRepository';
 import { getSafetyNotificationAdapter } from './safetyNotificationAdapter';
+import { trustedContactService } from './trustedContactService';
 import {
   EmergencyContact,
   HumanSafetyPreferences,
@@ -224,6 +225,7 @@ export class SosService {
 
       sosRepository.updateActivationAttemptStatus(incidentId, 'CANCELLED');
       sosRepository.revokeIncidentLocation(incidentId, now);
+      trustedContactService.revokeIncidentGrants(incidentId, 'SOS_CANCELLED');
       sosRepository.recordStatusHistory({
         id: generateCanonicalId('ssh'),
         incident_id: incidentId,
@@ -434,6 +436,8 @@ export class SosService {
       return sosRepository.getNotificationAttempt(attemptId);
     }
 
+    const access = trustedContactService.ensureGrantForNotificationAttempt(attempt);
+
     const attemptedAt = getCurrentUtcIsoString();
     sosRepository.updateNotificationAttempt(attemptId, {
       status: SosNotificationStatus.ATTEMPTED,
@@ -447,7 +451,8 @@ export class SosService {
       destination,
       incident_id: incident.id,
       contact_id: contact.id,
-      message: this.buildNotificationMessage(incident, attempt, contact),
+      portal_url: access.portal_url,
+      message: this.buildNotificationMessage(incident, attempt, contact, access.portal_url),
     });
 
     const now = getCurrentUtcIsoString();
@@ -627,6 +632,7 @@ export class SosService {
         throw new CanonicalAppError(ErrorCode.CONFLICT, 'SOS state changed concurrently', 409);
       }
       sosRepository.revokeIncidentLocation(incidentId, now);
+      trustedContactService.revokeIncidentGrants(incidentId, 'SOS_CLOSED');
       sosRepository.recordStatusHistory({
         id: generateCanonicalId('ssh'),
         incident_id: incidentId,
@@ -797,7 +803,8 @@ export class SosService {
   private buildNotificationMessage(
     incident: SosIncident,
     attempt: SosNotificationAttempt,
-    contact: EmergencyContact
+    contact: EmergencyContact,
+    trustedContactPortalUrl: string
   ): string {
     const parts = ['Garage OS safety alert.'];
     if (attempt.share_incident_type) {
@@ -823,6 +830,7 @@ export class SosService {
       const user = getDatabase().prepare('SELECT phone FROM users WHERE id = ? LIMIT 1').get(incident.user_id) as any | undefined;
       if (user?.phone) parts.push(`Callback: ${user.phone}.`);
     }
+    parts.push(`Trusted contact view: ${trustedContactPortalUrl}`);
     parts.push('If you believe there is immediate danger, contact the appropriate local emergency service directly.');
     return parts.join(' ');
   }
