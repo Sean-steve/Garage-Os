@@ -30,6 +30,7 @@ import { BentoMarketplaceOrders } from './client/components/BentoMarketplaceOrde
 import { BentoMarketplacePayments } from './client/components/BentoMarketplacePayments';
 import { BentoMarketplaceFulfillment } from './client/components/BentoMarketplaceFulfillment';
 import { BentoMarketplaceTrust } from './client/components/BentoMarketplaceTrust';
+import { BentoMarketplaceDiscovery } from './client/components/BentoMarketplaceDiscovery';
 import {
   ActiveTab,
   PlatformCapabilities,
@@ -489,6 +490,19 @@ export default function App() {
         {activeTab === 'trust' && (
           <BentoMarketplaceTrust
             actor={actor}
+            onNotify={(msg) => {
+              setActionStatus(msg);
+              setTimeout(() => setActionStatus(null), 4000);
+            }}
+          />
+        )}
+
+        {activeTab === 'discovery' && (
+          <BentoMarketplaceDiscovery
+            actor={actor}
+            vehicles={vehicles}
+            selectedVehicleId={selectedVehicleId}
+            onSelectVehicle={setSelectedVehicleId}
             onNotify={(msg) => {
               setActionStatus(msg);
               setTimeout(() => setActionStatus(null), 4000);
