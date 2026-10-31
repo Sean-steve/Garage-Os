@@ -480,7 +480,7 @@ export const SPRINT_15_TRACEABILITY_MATRIX: TraceabilityItem[] = [
     source: 'GAR-017/GAR-032/GAR-039/GAR-040/GAR-049',
     title: 'Emergency Circle & Human Safety Foundation',
     criticality: 'LAUNCH_CRITICAL',
-    status: 'IMPLEMENTED',
+    status: 'VERIFIED',
     implementation_refs: [
       'src/server/safety/types.ts',
       'src/server/safety/safetyRepository.ts',
