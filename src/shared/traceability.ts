@@ -865,3 +865,73 @@ export const SPRINT_22_TRACEABILITY_MATRIX: TraceabilityItem[] = [
     notes: 'Sprint 22 is physical-goods marketplace foundation only. Fitment remains database-constrained UNKNOWN until Sprint 23; authenticity remains NOT_VERIFIED; checkout/orders/payments are absent until their owning sprint.',
   },
 ];
+
+
+/**
+ * Sprint 23 — Vehicle Compatibility & Fitment (GAR-022)
+ */
+export const SPRINT_23_TRACEABILITY_MATRIX: TraceabilityItem[] = [
+  {
+    requirement_id: 'GAR-DEV-S23',
+    source: 'GAR-022',
+    title: 'Vehicle Compatibility & Fitment',
+    criticality: 'REQUIRED',
+    status: 'VERIFIED',
+    implementation_refs: [
+      'src/server/fitment/fitmentService.ts',
+      'src/server/fitment/fitmentRepository.ts',
+      'src/server/fitment/types.ts',
+      'src/server/api/fitmentRouter.ts',
+    ],
+    schema_refs: [
+      'marketplace_fitment_sources',
+      'marketplace_product_fitment_rules',
+      'marketplace_fitment_decisions',
+      'marketplace_fitment_installations',
+    ],
+    api_event_refs: [
+      'GET /api/v1/marketplace/fitment/vehicles/:vehicleId/search',
+      'GET /api/v1/marketplace/listings/:listingId/fitment',
+      'POST /api/v1/marketplace/seller/stores/:storeId/products/:productId/fitment/rules',
+      'marketplace.fitment.rule.created',
+      'marketplace.fitment.evaluated',
+      'marketplace.fitment.installation.recorded',
+    ],
+    ui_refs: ['src/client/components/BentoFitment.tsx'],
+    test_refs: ['tests/integration/vehicleCompatibilityFitment.test.ts'],
+    ops_refs: ['.github/workflows/certification.yml'],
+    notes: 'Fitment is contextual to product × vehicle. Confirmed requires verified authority evidence; all results explicitly remain non-guaranteed.',
+  },
+  {
+    requirement_id: 'GAR-022-TRUTH',
+    source: 'GAR-022 / GAR-000 Data Truth Law',
+    title: 'Compatibility evidence hierarchy, uncertainty and conflict handling',
+    criticality: 'LAUNCH_CRITICAL',
+    status: 'VERIFIED',
+    implementation_refs: ['src/server/fitment/fitmentService.ts'],
+    schema_refs: ['marketplace_product_fitment_rules', 'marketplace_fitment_decisions'],
+    api_event_refs: ['marketplace.fitment.evaluated'],
+    ui_refs: ['BentoFitment compatibility badges and evidence language'],
+    test_refs: ['tests/integration/vehicleCompatibilityFitment.test.ts'],
+    ops_refs: [],
+    notes: 'Seller claims cannot self-promote to VERIFIED. Conflicting inclusion/exclusion evidence returns CONFLICT and is excluded from compatible-part search.',
+  },
+  {
+    requirement_id: 'GAR-022-CATALOG-ADAPTER',
+    source: 'GAR-022',
+    title: 'Future external catalog/provider fitment source boundary',
+    criticality: 'REQUIRED',
+    status: 'VERIFIED',
+    implementation_refs: ['src/server/fitment/types.ts', 'src/server/fitment/fitmentService.ts'],
+    schema_refs: ['marketplace_fitment_sources'],
+    api_event_refs: [
+      'GET /api/v1/marketplace/admin/fitment/sources',
+      'POST /api/v1/marketplace/admin/fitment/sources',
+      'POST /api/v1/marketplace/admin/fitment/rules',
+    ],
+    ui_refs: ['BentoFitment'],
+    test_refs: ['tests/integration/vehicleCompatibilityFitment.test.ts'],
+    ops_refs: [],
+    notes: 'Manufacturer/catalog/garage/platform sources are registered independently from seller claims with explicit trust rank and verification-authority capability.',
+  },
+];

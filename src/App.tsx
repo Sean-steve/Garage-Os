@@ -25,6 +25,7 @@ import { BentoAccidents } from './client/components/BentoAccidents';
 import { BentoCarCare } from './client/components/BentoCarCare';
 import { BentoTripGuardian } from './client/components/BentoTripGuardian';
 import { BentoMarketplace } from './client/components/BentoMarketplace';
+import { BentoFitment } from './client/components/BentoFitment';
 import {
   ActiveTab,
   PlatformCapabilities,
@@ -428,6 +429,19 @@ export default function App() {
         {activeTab === 'marketplace' && (
           <BentoMarketplace
             actor={actor}
+            onNotify={(msg) => {
+              setActionStatus(msg);
+              setTimeout(() => setActionStatus(null), 4000);
+            }}
+          />
+        )}
+
+        {activeTab === 'fitment' && (
+          <BentoFitment
+            actor={actor}
+            vehicles={vehicles}
+            selectedVehicleId={selectedVehicleId}
+            onSelectVehicle={setSelectedVehicleId}
             onNotify={(msg) => {
               setActionStatus(msg);
               setTimeout(() => setActionStatus(null), 4000);
