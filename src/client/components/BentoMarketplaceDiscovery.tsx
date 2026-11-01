@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Car, ListFilter, RefreshCw, Search, Sparkles, Store } from 'lucide-react';
+import { Bookmark, Car, ListFilter, RefreshCw, Search, Sparkles, Store } from 'lucide-react';
 
 interface Props{
   actor:any;vehicles:any[];selectedVehicleId:string;onSelectVehicle:(id:string)=>void;onNotify:(message:string)=>void;
@@ -103,6 +103,22 @@ export const BentoMarketplaceDiscovery:React.FC<Props>=({actor,vehicles,selected
     if(!r.ok)return;const j=await r.json();setRelated((j.data||j).items||[]);
   }
 
+  async function saveListing(listingId:string){
+    await jsonCall('/api/v1/marketplace/listings/'+listingId+'/save','POST',{
+      price_drop_alert_enabled:true,restock_alert_enabled:true
+    });
+  }
+
+  async function saveCurrentSearch(){
+    const name=query.trim()?('Search: '+query.trim()).slice(0,120):'Marketplace search';
+    await jsonCall('/api/v1/marketplace/saved-searches','POST',{
+      name,
+      criteria:{query:query.trim()||undefined},
+      vehicle_id:useVehicle&&selectedVehicleId?selectedVehicleId:null,
+      new_match_alert_enabled:true
+    });
+  }
+
   async function createSellerCollection(){
     if(!storeId||!sellerForm.slug||!sellerForm.title||!selectedListingIds.length){onNotify('Choose a store, title, slug and at least one listing.');return;}
     const created=await jsonCall('/api/v1/marketplace/seller/stores/'+storeId+'/merchandising','POST',{
@@ -133,7 +149,7 @@ export const BentoMarketplaceDiscovery:React.FC<Props>=({actor,vehicles,selected
       <div className="mt-3 flex flex-wrap gap-2 text-[10px]"><span className="rounded border border-slate-700 px-2 py-1">score {x.organic_score}</span><span className="rounded border border-emerald-800 px-2 py-1 text-emerald-300">{x.inventory_status.replaceAll('_',' ')}</span>{x.trust?.average_rating!==null&&<span className="rounded border border-amber-800 px-2 py-1 text-amber-300">★ {x.trust.average_rating} ({x.trust.verified_review_count})</span>}{x.fitment&&<span className="rounded border border-cyan-800 px-2 py-1 text-cyan-300">{x.fitment.status.replaceAll('_',' ')} • not guaranteed</span>}</div>
       <div className="mt-3 space-y-1 text-[10px] text-slate-500">{(x.rank_components||[]).map((r:any,i:number)=><p key={i}><b className="text-slate-400">{r.key} {r.score>=0?'+':''}{r.score}:</b> {r.reason}</p>)}</div>
       {recommendation&&(x.recommendation_reasons||[]).length>0&&<div className="mt-3 rounded border border-cyan-500/20 bg-cyan-500/5 p-2 text-[10px] text-cyan-100">{x.recommendation_reasons.join(' ')}</div>}
-      {!recommendation&&<button onClick={()=>void showRelated(x.listing_id)} className="mt-3 rounded border border-slate-700 px-3 py-1 text-xs">Related items</button>}
+      <div className="mt-3 flex gap-2"><button disabled={busy} onClick={()=>void saveListing(x.listing_id)} className="flex items-center gap-1 rounded border border-emerald-800 px-3 py-1 text-xs text-emerald-300"><Bookmark className="h-3 w-3"/>Save</button>{!recommendation&&<button onClick={()=>void showRelated(x.listing_id)} className="rounded border border-slate-700 px-3 py-1 text-xs">Related items</button>}</div>
     </article>)}</div>;
   }
 
@@ -144,7 +160,7 @@ export const BentoMarketplaceDiscovery:React.FC<Props>=({actor,vehicles,selected
     </div>
 
     {view==='search'&&<div className="space-y-5">
-      <div className="flex flex-wrap gap-2 rounded-xl border border-slate-800 bg-slate-900/40 p-4"><div className="flex min-w-[260px] flex-1 items-center gap-2 rounded-lg border border-slate-700 bg-slate-950 px-3"><Search className="h-4 w-4 text-slate-500"/><input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')void searchMarketplace();}} placeholder="Search title, brand, SKU or part number" className="w-full bg-transparent py-2 text-sm outline-none"/></div><select value={sort} onChange={e=>setSort(e.target.value)} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs"><option>RELEVANCE</option><option>PRICE_ASC</option><option>PRICE_DESC</option><option>RATING</option></select><label className="flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-xs"><input type="checkbox" checked={useVehicle} onChange={e=>setUseVehicle(e.target.checked)}/>Vehicle context</label>{useVehicle&&<select value={selectedVehicleId} onChange={e=>onSelectVehicle(e.target.value)} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">{vehicles.map(v=><option key={v.id} value={v.id}>{v.display_name}</option>)}</select>}<button disabled={busy} onClick={()=>void searchMarketplace()} className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold">Search</button></div>
+      <div className="flex flex-wrap gap-2 rounded-xl border border-slate-800 bg-slate-900/40 p-4"><div className="flex min-w-[260px] flex-1 items-center gap-2 rounded-lg border border-slate-700 bg-slate-950 px-3"><Search className="h-4 w-4 text-slate-500"/><input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')void searchMarketplace();}} placeholder="Search title, brand, SKU or part number" className="w-full bg-transparent py-2 text-sm outline-none"/></div><select value={sort} onChange={e=>setSort(e.target.value)} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs"><option>RELEVANCE</option><option>PRICE_ASC</option><option>PRICE_DESC</option><option>RATING</option></select><label className="flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-xs"><input type="checkbox" checked={useVehicle} onChange={e=>setUseVehicle(e.target.checked)}/>Vehicle context</label>{useVehicle&&<select value={selectedVehicleId} onChange={e=>onSelectVehicle(e.target.value)} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs">{vehicles.map(v=><option key={v.id} value={v.id}>{v.display_name}</option>)}</select>}<button disabled={busy} onClick={()=>void searchMarketplace()} className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold">Search</button><button disabled={busy} onClick={()=>void saveCurrentSearch()} className="flex items-center gap-1 rounded-lg border border-cyan-700 px-3 py-2 text-xs text-cyan-200"><Bookmark className="h-3.5 w-3.5"/>Save search</button></div>
       {homeCollections.length>0&&<div className="space-y-3"><h3 className="font-bold">Curated shelves</h3>{homeCollections.map((c:any)=><div key={c.collection.id} className="rounded-xl border border-violet-700/30 bg-violet-950/10 p-4"><div className="flex justify-between gap-3"><div><b>{c.collection.title}</b><p className="text-xs text-slate-400">{c.collection.description}</p></div><span className="h-fit rounded border border-violet-700 px-2 py-1 text-[10px] text-violet-200">{c.disclosure.source_label.replaceAll('_',' ')} • NOT PAID • NO RANK BOOST</span></div><div className="mt-3 flex flex-wrap gap-2">{c.items.map((i:any)=><span key={i.listing.listing_id} className="rounded border border-slate-700 px-2 py-1 text-xs">{i.listing.title}</span>)}</div></div>)}</div>}
       {searchTruth&&<p className="text-xs text-slate-500">Ranking explainable: {String(searchTruth.ranking_explainable)} • paid placement: {String(searchTruth.paid_placement_supported)} • raw search history persisted: {String(searchTruth.raw_search_history_persisted)}</p>}
       {cards(results)}

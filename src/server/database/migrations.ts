@@ -5668,6 +5668,112 @@ export const MIGRATIONS: Migration[] = [
         DROP TABLE IF EXISTS marketplace_merchandising_collections;
       `);
     },
+  },
+  {
+    id: '030_marketplace_saved_items_alerts_engagement',
+    name: 'Marketplace Saved Items, Alerts & Engagement (Sprint 29)',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS marketplace_saved_listings (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          listing_id TEXT NOT NULL REFERENCES marketplace_listings(id) ON DELETE CASCADE,
+          price_minor_at_save INTEGER NOT NULL,
+          inventory_status_at_save TEXT NOT NULL,
+          last_seen_price_minor INTEGER NOT NULL,
+          last_seen_inventory_status TEXT NOT NULL,
+          price_drop_alert_enabled INTEGER NOT NULL DEFAULT 1,
+          restock_alert_enabled INTEGER NOT NULL DEFAULT 1,
+          saved_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          UNIQUE(user_id,listing_id),
+          CHECK (price_minor_at_save >= 0),
+          CHECK (last_seen_price_minor >= 0),
+          CHECK (price_drop_alert_enabled IN (0,1)),
+          CHECK (restock_alert_enabled IN (0,1))
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_saved_listings_user
+          ON marketplace_saved_listings(user_id,saved_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_marketplace_saved_listings_listing
+          ON marketplace_saved_listings(listing_id);
+
+        CREATE TABLE IF NOT EXISTS marketplace_saved_searches (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          name TEXT NOT NULL,
+          criteria_json TEXT NOT NULL,
+          vehicle_id TEXT REFERENCES vehicles(id) ON DELETE CASCADE,
+          new_match_alert_enabled INTEGER NOT NULL DEFAULT 1,
+          status TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          CHECK (new_match_alert_enabled IN (0,1)),
+          CHECK (status IN ('ACTIVE','PAUSED'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_saved_searches_user
+          ON marketplace_saved_searches(user_id,status,created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS marketplace_saved_search_matches (
+          saved_search_id TEXT NOT NULL REFERENCES marketplace_saved_searches(id) ON DELETE CASCADE,
+          listing_id TEXT NOT NULL REFERENCES marketplace_listings(id) ON DELETE CASCADE,
+          first_seen_at TEXT NOT NULL,
+          last_seen_at TEXT NOT NULL,
+          alerted_at TEXT,
+          PRIMARY KEY(saved_search_id,listing_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_saved_search_matches_listing
+          ON marketplace_saved_search_matches(listing_id);
+
+        CREATE TABLE IF NOT EXISTS marketplace_alert_preferences (
+          user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+          in_app_enabled INTEGER NOT NULL DEFAULT 1,
+          email_requested INTEGER NOT NULL DEFAULT 0,
+          sms_requested INTEGER NOT NULL DEFAULT 0,
+          push_requested INTEGER NOT NULL DEFAULT 0,
+          max_alerts_per_day INTEGER NOT NULL DEFAULT 20,
+          quiet_hours_start TEXT,
+          quiet_hours_end TEXT,
+          updated_at TEXT NOT NULL,
+          CHECK (in_app_enabled IN (0,1)),
+          CHECK (email_requested IN (0,1)),
+          CHECK (sms_requested IN (0,1)),
+          CHECK (push_requested IN (0,1)),
+          CHECK (max_alerts_per_day BETWEEN 1 AND 50),
+          CHECK (quiet_hours_start IS NULL OR quiet_hours_start GLOB '[0-2][0-9]:[0-5][0-9]'),
+          CHECK (quiet_hours_end IS NULL OR quiet_hours_end GLOB '[0-2][0-9]:[0-5][0-9]')
+        );
+
+        CREATE TABLE IF NOT EXISTS marketplace_alerts (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          alert_type TEXT NOT NULL,
+          listing_id TEXT REFERENCES marketplace_listings(id) ON DELETE SET NULL,
+          saved_listing_id TEXT REFERENCES marketplace_saved_listings(id) ON DELETE CASCADE,
+          saved_search_id TEXT REFERENCES marketplace_saved_searches(id) ON DELETE CASCADE,
+          fingerprint TEXT NOT NULL,
+          title TEXT NOT NULL,
+          body TEXT NOT NULL,
+          state TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          read_at TEXT,
+          dismissed_at TEXT,
+          UNIQUE(user_id,fingerprint),
+          CHECK (alert_type IN ('SAVED_LISTING_PRICE_DROP','SAVED_LISTING_RESTOCK','SAVED_SEARCH_NEW_MATCH')),
+          CHECK (state IN ('UNREAD','READ','DISMISSED'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_alerts_user
+          ON marketplace_alerts(user_id,state,created_at DESC);
+      `);
+    },
+    down: (db) => {
+      db.exec(`
+        DROP TABLE IF EXISTS marketplace_alerts;
+        DROP TABLE IF EXISTS marketplace_alert_preferences;
+        DROP TABLE IF EXISTS marketplace_saved_search_matches;
+        DROP TABLE IF EXISTS marketplace_saved_searches;
+        DROP TABLE IF EXISTS marketplace_saved_listings;
+      `);
+    },
   }
 ];
 
