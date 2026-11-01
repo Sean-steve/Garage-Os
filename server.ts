@@ -41,6 +41,7 @@ import { registerRecurringExpenseJobWorkers } from './src/server/jobs/recurringE
 import { registerBookingJobWorkers } from './src/server/jobs/bookingJob';
 import { registerSafetyJobWorkers } from './src/server/jobs/safetyJob';
 import { registerTripGuardianJobWorkers } from './src/server/jobs/tripGuardianJob';
+import { registerMarketplaceEngagementJobWorkers } from './src/server/jobs/marketplaceEngagementJob';
 import { realtimeBus } from './src/server/dispatch/realtimeBus';
 import { dispatchWorker } from './src/server/dispatch/dispatchWorker';
 
@@ -147,6 +148,9 @@ async function bootstrapServer() {
   registerSafetyJobWorkers();
   // Register Trip Guardian check-in and location-retention workers (Sprint 21)
   registerTripGuardianJobWorkers();
+
+  // Register marketplace saved-item/search alert evaluator (Sprint 29)
+  registerMarketplaceEngagementJobWorkers();
 
   // Initialize Timeline Event Projector (GAR-005)
   timelineProjector.initialize();
