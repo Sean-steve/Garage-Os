@@ -11,6 +11,7 @@ import { createCanonicalEventEnvelope } from '../events/envelope';
 import { enqueueOutboxEvent } from '../events/outbox';
 import { recordAuditEvent } from '../security/audit';
 import { getDatabase } from '../database/connection';
+import { jobEngine } from '../jobs/jobEngine';
 import { marketplaceRepository } from './marketplaceRepository';
 import {
   CreateMarketplaceListingInput,
@@ -334,6 +335,7 @@ export class MarketplaceService {
         payload:{listing_id:listingId,version:updated.version,price_minor:updated.price_minor,currency:updated.currency,inventory_status:updated.inventory_status}
       }),db);
     });
+    jobEngine.enqueue('marketplace.engagement.alert.evaluate',{listing_id:listingId},{correlationId:listingId});
     return updated;
   }
 
@@ -376,6 +378,7 @@ export class MarketplaceService {
         metadata:{store_id:storeId,price_minor:updated.price_minor,currency:updated.currency,fitment_status:'UNKNOWN'}
       },db);
     });
+    jobEngine.enqueue('marketplace.engagement.alert.evaluate',{listing_id:listingId},{correlationId:listingId});
     return updated;
   }
 
