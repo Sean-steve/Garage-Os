@@ -187,7 +187,8 @@ export class MarketplaceEngagementService{
       const created=repo.createAlert(a);
       if(created){used++;alertsCreated++;this.emit(actor,'marketplace.engagement.alert.created',a.id,
         {...(a.listing_id?{marketplace_listing:a.listing_id}:{}),marketplace_alert:a.id},
-        {alert_id:a.id,alert_type:a.alert_type,delivery_channel:'IN_APP',external_delivery_attempted:false},undefined);}
+        {alert_id:a.id,alert_type:a.alert_type,delivery_channel:'IN_APP',external_delivery_attempted:false},undefined,
+        DataProvenanceClass.DERIVED_DETERMINISTIC);}
       return created;
     };
 
@@ -267,9 +268,10 @@ export class MarketplaceEngagementService{
       saved_listing_id:savedListingId,saved_search_id:savedSearchId,fingerprint,title,body,state:'UNREAD',
       created_at:getCurrentUtcIsoString(),read_at:null,dismissed_at:null};
   }
-  private emit(actor:AuthenticatedActorContext,type:string,correlationId:string,subjects:Record<string,string>,payload:any,db?:any){
+  private emit(actor:AuthenticatedActorContext,type:string,correlationId:string,subjects:Record<string,string>,payload:any,db?:any,
+    provenance:DataProvenanceClass=DataProvenanceClass.OWNER_ASSERTED){
     enqueueOutboxEvent(createCanonicalEventEnvelope({type,producer:'garage-os-marketplace-engagement',correlation_id:correlationId,
-      subject_ids:subjects,actor_id:actor.user_id,actor_type:actorType(actor),provenance_class:DataProvenanceClass.OWNER_ASSERTED,payload}),db);
+      subject_ids:subjects,actor_id:actor.user_id,actor_type:actorType(actor),provenance_class:provenance,payload}),db);
   }
   private audit(actor:AuthenticatedActorContext,action:string,resourceType:string,resourceId:string,after:any,db?:any){
     recordAuditEvent({actor_id:actor.user_id,actor_type:actorType(actor),action,resource_type:resourceType,resource_id:resourceId,
