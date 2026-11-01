@@ -44,12 +44,15 @@ describe('Trip Guardian Foundation (GAR-019 / Sprint 21)',()=>{
   });
 
   function createJourney(overrides:any={}){
+    // Keep the certification fixture future-relative so check-in scheduling remains
+    // deterministic across calendar/date rollovers.
+    const now=Date.now();
     return tripGuardianService.create(owner,{
       vehicle_id:vehicleId,
       origin_label:'Home area',
       destination_label:'Destination area',
-      planned_departure_at:'2026-11-01T05:00:00.000Z',
-      expected_arrival_at:'2026-11-01T08:00:00.000Z',
+      planned_departure_at:new Date(now+60*60*1000).toISOString(),
+      expected_arrival_at:new Date(now+4*60*60*1000).toISOString(),
       checkins_enabled:true,
       checkin_interval_minutes:60,
       ...overrides,
