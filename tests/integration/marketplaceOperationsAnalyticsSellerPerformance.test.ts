@@ -243,7 +243,7 @@ describe('Marketplace Operations Analytics & Seller Performance (Sprint 30)',()=
       INSERT INTO marketplace_return_items
       (id,return_id,order_item_id,listing_id,product_id,requested_quantity,received_quantity,restock_quantity,
        condition_at_return,unit_price_minor,refund_amount_minor,notes)
-      VALUES ('mri_an','mr_an',?,?,?,?,2,2,1,'RESTOCKABLE',300000,300000,NULL)
+      VALUES ('mri_an','mr_an',?,?,?,2,2,1,'RESTOCKABLE',300000,300000,NULL)
     `).run(o.itemId,p.listing.id,p.product.id);
     const m=marketplaceAnalyticsService.seller(sellerA,storeA,{from:'2026-11-01',to:'2026-11-01'}).fulfillment;
     assert.equal(m.completed_fulfillments,1);
@@ -258,6 +258,7 @@ describe('Marketplace Operations Analytics & Seller Performance (Sprint 30)',()=
     const p=makeListing({title:'Trust item'});
     const o=order({listing:p.listing,product:p.product,placedAt:'2026-11-01T08:00:00.000Z'});
     capture(o,storeA,'2026-11-01T08:30:00.000Z');
+    const hiddenOrder=order({listing:p.listing,product:p.product,buyer:buyer2,placedAt:'2026-11-01T09:00:00.000Z'});
     const review=db.prepare(`
       INSERT INTO marketplace_reviews
       (id,target_type,store_id,product_id,order_id,order_item_id,buyer_user_id,rating,title,body,verified_purchase,status,
@@ -265,7 +266,7 @@ describe('Marketplace Operations Analytics & Seller Performance (Sprint 30)',()=
       VALUES (?,?,?,?,?,?,?,?,?,?,1,?,?,?,?)
     `);
     review.run('mrev_pub','PRODUCT',storeA,p.product.id,o.id,o.itemId,buyer1.user_id,5,'Great','Good','PUBLISHED',null,'2026-11-01T12:00:00.000Z','2026-11-01T12:00:00.000Z');
-    review.run('mrev_hidden','PRODUCT',storeA,p.product.id,o.id,o.itemId,buyer1.user_id,1,'Hidden','Hidden','HIDDEN','moderated','2026-11-01T13:00:00.000Z','2026-11-01T13:00:00.000Z');
+    review.run('mrev_hidden','PRODUCT',storeA,p.product.id,hiddenOrder.id,hiddenOrder.itemId,buyer2.user_id,1,'Hidden','Hidden','HIDDEN','moderated','2026-11-01T13:00:00.000Z','2026-11-01T13:00:00.000Z');
     db.prepare(`
       INSERT INTO marketplace_disputes
       (id,dispute_number,order_id,store_id,buyer_user_id,category,status,summary,buyer_requested_outcome,
