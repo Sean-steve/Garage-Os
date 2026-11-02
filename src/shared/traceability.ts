@@ -1560,3 +1560,92 @@ export const SPRINT_30_TRACEABILITY_MATRIX: TraceabilityItem[] = [
     notes: 'Seller analytics require tenant marketplace-order read authority. Platform aggregation is Platform Admin only. Buyer identities are never returned.',
   },
 ];
+
+
+/**
+ * Sprint 31 — Marketplace Growth, Retention & Seller Intelligence
+ */
+export const SPRINT_31_TRACEABILITY_MATRIX: TraceabilityItem[] = [
+  {
+    requirement_id: 'GAR-DEV-S31',
+    source: 'GAR-021 marketplace growth extension / GAR-000 truth, privacy & explainability',
+    title: 'Marketplace Growth, Retention & Seller Intelligence',
+    criticality: 'LAUNCH_CRITICAL',
+    status: 'IMPLEMENTED',
+    implementation_refs: [
+      'src/server/marketplaceGrowth/marketplaceGrowthRepository.ts',
+      'src/server/marketplaceGrowth/marketplaceGrowthService.ts',
+      'src/server/marketplaceGrowth/types.ts',
+      'src/server/api/marketplaceGrowthRouter.ts',
+    ],
+    schema_refs: [
+      'marketplace_settlement_ledger_entries','marketplace_orders','marketplace_order_items',
+      'marketplace_listings','marketplace_products','marketplace_categories','marketplace_saved_listings',
+      'marketplace_reviews','marketplace_fulfillments'
+    ],
+    api_event_refs: [
+      'GET /api/v1/marketplace/seller/stores/:storeId/growth',
+      'GET /api/v1/marketplace/admin/growth',
+    ],
+    ui_refs: ['src/client/components/BentoMarketplaceGrowth.tsx'],
+    test_refs: ['tests/integration/marketplaceGrowthRetentionSellerIntelligence.test.ts'],
+    ops_refs: ['.github/workflows/certification.yml'],
+    notes: 'Read-only growth, repeat-purchase retention and deterministic seller intelligence from settlement captures and explicit saved intent; no browsing/search tracking or opaque scoring.',
+  },
+  {
+    requirement_id: 'GAR-S31-GROWTH-TRUTH',
+    source: 'Sprint 25 provider-authoritative payment boundary',
+    title: 'Commercial growth derives from provider-confirmed settlement captures',
+    criticality: 'LAUNCH_CRITICAL',
+    status: 'IMPLEMENTED',
+    implementation_refs: ['src/server/marketplaceGrowth/marketplaceGrowthRepository.ts'],
+    schema_refs: ['marketplace_settlement_ledger_entries','marketplace_orders'],
+    api_event_refs: ['GET /api/v1/marketplace/seller/stores/:storeId/growth'],
+    ui_refs: ['Commercial growth comparison cards'],
+    test_refs: ['tests/integration/marketplaceGrowthRetentionSellerIntelligence.test.ts'],
+    ops_refs: [],
+    notes: 'Captured orders and paid-buyer acquisition use PAYMENT_CAPTURE ledger entries, not legacy payment_status or unpaid order totals. Zero prior-period baselines return null percent change instead of fabricated infinity.',
+  },
+  {
+    requirement_id: 'GAR-S31-RETENTION',
+    source: 'Marketplace repeat-purchase cohort model',
+    title: 'Maturity-aware 30/90 day repeat-purchase cohorts',
+    criticality: 'REQUIRED',
+    status: 'IMPLEMENTED',
+    implementation_refs: ['src/server/marketplaceGrowth/marketplaceGrowthRepository.ts'],
+    schema_refs: ['marketplace_settlement_ledger_entries','marketplace_orders'],
+    api_event_refs: ['GET /api/v1/marketplace/seller/stores/:storeId/growth'],
+    ui_refs: ['Repeat-purchase cohort table'],
+    test_refs: ['tests/integration/marketplaceGrowthRetentionSellerIntelligence.test.ts'],
+    ops_refs: [],
+    notes: 'Cohorts anchor on first settlement capture. Buyers not old enough for 30/90-day observation are excluded from the corresponding denominator. Repeat purchase is not mislabeled subscription retention and churn is not inferred.',
+  },
+  {
+    requirement_id: 'GAR-S31-SELLER-INTELLIGENCE',
+    source: 'GAR-000 explainability / Sprint 29 explicit intent / Sprint 30 operations truth',
+    title: 'Deterministic seller opportunities with explicit evidence and no automatic action',
+    criticality: 'REQUIRED',
+    status: 'IMPLEMENTED',
+    implementation_refs: ['src/server/marketplaceGrowth/marketplaceGrowthRepository.ts'],
+    schema_refs: ['marketplace_saved_listings','marketplace_listings','marketplace_order_items','marketplace_fulfillments','marketplace_reviews'],
+    api_event_refs: ['GET /api/v1/marketplace/seller/stores/:storeId/growth'],
+    ui_refs: ['Seller opportunity cards'],
+    test_refs: ['tests/integration/marketplaceGrowthRetentionSellerIntelligence.test.ts'],
+    ops_refs: [],
+    notes: 'Opportunities cover explicit saved demand, stock, review coverage and fully-paid fulfillment backlog. No auto-discount, auto-message, inventory mutation, buyer receipt mutation or fabricated scarcity.',
+  },
+  {
+    requirement_id: 'GAR-S31-PRIVACY',
+    source: 'GAR-039/GAR-040 privacy & tenant isolation / Sprint 28-29 privacy boundary',
+    title: 'Growth intelligence avoids hidden behavioral profiling and buyer identity exposure',
+    criticality: 'LAUNCH_CRITICAL',
+    status: 'IMPLEMENTED',
+    implementation_refs: ['src/server/marketplaceGrowth/marketplaceGrowthService.ts','src/server/marketplaceGrowth/marketplaceGrowthRepository.ts'],
+    schema_refs: ['marketplace_saved_listings','marketplace_stores','organization_memberships'],
+    api_event_refs: ['GET /api/v1/marketplace/seller/stores/:storeId/growth','GET /api/v1/marketplace/admin/growth'],
+    ui_refs: ['Growth truth disclosure'],
+    test_refs: ['tests/integration/marketplaceGrowthRetentionSellerIntelligence.test.ts'],
+    ops_refs: ['audit_events'],
+    notes: 'Seller intelligence uses commercial capture facts and aggregate explicit saved state only. Browsing/search history and hidden profiles are not used; seller access is tenant-scoped and platform aggregation is admin-only.',
+  },
+];
