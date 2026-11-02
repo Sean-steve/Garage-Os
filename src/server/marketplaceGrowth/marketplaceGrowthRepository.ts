@@ -202,8 +202,11 @@ export class MarketplaceGrowthRepository{
     }
     const backlog=getDatabase().prepare(`
       SELECT
-        SUM(CASE WHEN EXISTS(SELECT 1 FROM marketplace_settlement_ledger_entries e WHERE e.order_id=o.id AND e.entry_type='PAYMENT_CAPTURE')
-          AND NOT EXISTS(SELECT 1 FROM marketplace_fulfillments f WHERE f.order_id=o.id) THEN 1 ELSE 0 END) paid_backlog,
+        SUM(CASE WHEN
+          (SELECT COALESCE(SUM(e.amount_minor),0) FROM marketplace_settlement_ledger_entries e WHERE e.order_id=o.id)=o.total_minor
+          AND EXISTS(SELECT 1 FROM marketplace_settlement_ledger_entries e2 WHERE e2.order_id=o.id AND e2.entry_type='PAYMENT_CAPTURE')
+          AND NOT EXISTS(SELECT 1 FROM marketplace_fulfillments f WHERE f.order_id=o.id)
+          THEN 1 ELSE 0 END) paid_backlog,
         SUM(CASE WHEN EXISTS(SELECT 1 FROM marketplace_fulfillments f WHERE f.order_id=o.id AND f.status='DELIVERY_REPORTED') THEN 1 ELSE 0 END) delivery_waiting
       FROM marketplace_orders o WHERE o.store_id=?
     `).get(storeId) as any;
