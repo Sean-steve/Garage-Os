@@ -280,8 +280,10 @@ describe('Marketplace Operations Analytics & Seller Performance (Sprint 30)',()=
     assert.equal(trust.open_disputes,1);
     assert.equal(trust.truth.disputes_are_context_not_guilt,true);
     const full=marketplaceAnalyticsService.seller(sellerA,storeA,{from:'2026-11-01',to:'2026-11-01'});
-    assert.equal(JSON.stringify(full).includes('seller_score'),false);
-    assert.equal(JSON.stringify(full).includes('trust_score'),false);
+    assert.equal(Object.prototype.hasOwnProperty.call(full,'seller_score'),false);
+    assert.equal(Object.prototype.hasOwnProperty.call(full.trust,'trust_score'),false);
+    assert.equal(full.truth.opaque_seller_score,false);
+    assert.equal(full.trust.truth.opaque_trust_score,false);
   });
 
   it('listing performance counts captured units but excludes unpaid order units and keeps saves aggregate-only',()=>{
