@@ -2,7 +2,7 @@ import React from 'react';
 import {
   Activity, AlertTriangle, BookOpenCheck, Building2, Car, Clock, FileCheck,
   Fuel, Layers, LifeBuoy, ListTree, LogOut, Radio, ShieldCheck, Sliders,
-  Truck, Wrench, ShieldAlert, Navigation, Store, ShoppingCart, CreditCard, PackageCheck, MessageSquare, Sparkles, Bookmark, BarChart3
+  Truck, Wrench, ShieldAlert, Navigation, Store, ShoppingCart, CreditCard, PackageCheck, MessageSquare, Sparkles, Bookmark, BarChart3, TrendingUp
 } from 'lucide-react';
 import { ActiveTab } from '../types';
 
@@ -49,6 +49,7 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'discovery', label: 'Discovery', icon: Sparkles },
     { id: 'engagement', label: 'Saved & Alerts', icon: Bookmark },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+    { id: 'growth', label: 'Growth', icon: TrendingUp },
   ];
 
   const admin: Array<{ id: ActiveTab; label: string; icon: React.ComponentType<{ className?: string }> }> = [
@@ -71,7 +72,7 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold tracking-tight text-white">GARAGE_OS</h1>
               <span className="px-2 py-0.5 text-[9px] font-bold tracking-wider uppercase bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 rounded-full">
-                S30 • OPERATIONS ANALYTICS
+                S31 • GROWTH & RETENTION
               </span>
             </div>
             <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mt-0.5">
