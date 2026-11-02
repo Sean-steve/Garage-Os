@@ -1471,3 +1471,92 @@ export const SPRINT_29_TRACEABILITY_MATRIX: TraceabilityItem[] = [
     notes: 'Sellers may see listing save counts for their own storefront but never saver identities or cross-tenant engagement details.',
   },
 ];
+
+
+/**
+ * Sprint 30 — Marketplace Operations Analytics & Seller Performance
+ */
+export const SPRINT_30_TRACEABILITY_MATRIX: TraceabilityItem[] = [
+  {
+    requirement_id: 'GAR-DEV-S30',
+    source: 'GAR-021 marketplace operations extension / GAR-000 truth & explainability',
+    title: 'Marketplace Operations Analytics & Seller Performance',
+    criticality: 'LAUNCH_CRITICAL',
+    status: 'IMPLEMENTED',
+    implementation_refs: [
+      'src/server/marketplaceAnalytics/marketplaceAnalyticsRepository.ts',
+      'src/server/marketplaceAnalytics/marketplaceAnalyticsService.ts',
+      'src/server/marketplaceAnalytics/types.ts',
+      'src/server/api/marketplaceAnalyticsRouter.ts',
+    ],
+    schema_refs: [
+      'marketplace_orders','marketplace_order_items','marketplace_settlement_ledger_entries',
+      'marketplace_fulfillments','marketplace_returns','marketplace_return_items',
+      'marketplace_reviews','marketplace_disputes','marketplace_saved_listings','marketplace_listings'
+    ],
+    api_event_refs: [
+      'GET /api/v1/marketplace/seller/stores/:storeId/analytics',
+      'GET /api/v1/marketplace/admin/analytics',
+    ],
+    ui_refs: ['src/client/components/BentoMarketplaceAnalytics.tsx'],
+    test_refs: ['tests/integration/marketplaceOperationsAnalyticsSellerPerformance.test.ts'],
+    ops_refs: ['.github/workflows/certification.yml'],
+    notes: 'Read-only analytics projection over authoritative marketplace records; no new transactional authority and no opaque seller score.',
+  },
+  {
+    requirement_id: 'GAR-S30-FINANCIAL-TRUTH',
+    source: 'Sprint 25 provider-authoritative finance boundary',
+    title: 'Seller money analytics derive only from settlement ledger',
+    criticality: 'LAUNCH_CRITICAL',
+    status: 'IMPLEMENTED',
+    implementation_refs: ['src/server/marketplaceAnalytics/marketplaceAnalyticsRepository.ts'],
+    schema_refs: ['marketplace_settlement_ledger_entries','marketplace_payment_intents','marketplace_refunds'],
+    api_event_refs: ['GET /api/v1/marketplace/seller/stores/:storeId/analytics'],
+    ui_refs: ['Seller money cards'],
+    test_refs: ['tests/integration/marketplaceOperationsAnalyticsSellerPerformance.test.ts'],
+    ops_refs: [],
+    notes: 'Order totals are never labeled revenue. Captures and refund adjustments come from the settlement ledger. Net seller receivable is explicitly not payout.',
+  },
+  {
+    requirement_id: 'GAR-S30-OPERATIONS',
+    source: 'Sprint 24-27 operational truth boundaries',
+    title: 'Operational backlog preserves payment, fulfillment, return and dispute state separation',
+    criticality: 'LAUNCH_CRITICAL',
+    status: 'IMPLEMENTED',
+    implementation_refs: ['src/server/marketplaceAnalytics/marketplaceAnalyticsRepository.ts'],
+    schema_refs: ['marketplace_orders','marketplace_fulfillments','marketplace_returns','marketplace_disputes'],
+    api_event_refs: ['GET /api/v1/marketplace/seller/stores/:storeId/analytics'],
+    ui_refs: ['Operations attention panel'],
+    test_refs: ['tests/integration/marketplaceOperationsAnalyticsSellerPerformance.test.ts'],
+    ops_refs: [],
+    notes: 'Paid-without-fulfillment, seller delivery-reported waiting buyer confirmation, returns and disputes remain distinct. Disputes are context, not guilt.',
+  },
+  {
+    requirement_id: 'GAR-S30-PERFORMANCE-EXPLAINABLE',
+    source: 'GAR-000 explainability / Sprint 27 trust boundary',
+    title: 'Seller performance uses separate explainable KPIs instead of opaque scoring',
+    criticality: 'REQUIRED',
+    status: 'IMPLEMENTED',
+    implementation_refs: ['src/server/marketplaceAnalytics/types.ts','src/server/marketplaceAnalytics/marketplaceAnalyticsRepository.ts'],
+    schema_refs: ['marketplace_reviews','marketplace_saved_listings','marketplace_order_items'],
+    api_event_refs: ['GET /api/v1/marketplace/seller/stores/:storeId/analytics'],
+    ui_refs: ['Funnel, fulfillment, trust and listing-performance panels'],
+    test_refs: ['tests/integration/marketplaceOperationsAnalyticsSellerPerformance.test.ts'],
+    ops_refs: [],
+    notes: 'No seller score or trust score is calculated. Verified ratings, disputes, saves, captured units and fulfillment facts are exposed separately.',
+  },
+  {
+    requirement_id: 'GAR-S30-PRIVACY-TENANCY',
+    source: 'GAR-039/GAR-040 privacy & tenant isolation',
+    title: 'Analytics are tenant-scoped and aggregate buyer behavior',
+    criticality: 'LAUNCH_CRITICAL',
+    status: 'IMPLEMENTED',
+    implementation_refs: ['src/server/marketplaceAnalytics/marketplaceAnalyticsService.ts'],
+    schema_refs: ['marketplace_stores','organization_memberships'],
+    api_event_refs: ['GET /api/v1/marketplace/seller/stores/:storeId/analytics','GET /api/v1/marketplace/admin/analytics'],
+    ui_refs: ['Seller analytics and platform operations views'],
+    test_refs: ['tests/integration/marketplaceOperationsAnalyticsSellerPerformance.test.ts'],
+    ops_refs: ['audit_events'],
+    notes: 'Seller analytics require tenant marketplace-order read authority. Platform aggregation is Platform Admin only. Buyer identities are never returned.',
+  },
+];
