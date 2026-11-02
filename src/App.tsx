@@ -32,6 +32,7 @@ import { BentoMarketplaceFulfillment } from './client/components/BentoMarketplac
 import { BentoMarketplaceTrust } from './client/components/BentoMarketplaceTrust';
 import { BentoMarketplaceDiscovery } from './client/components/BentoMarketplaceDiscovery';
 import { BentoMarketplaceEngagement } from './client/components/BentoMarketplaceEngagement';
+import { BentoMarketplaceAnalytics } from './client/components/BentoMarketplaceAnalytics';
 import {
   ActiveTab,
   PlatformCapabilities,
@@ -513,6 +514,16 @@ export default function App() {
 
         {activeTab === 'engagement' && (
           <BentoMarketplaceEngagement
+            actor={actor}
+            onNotify={(msg) => {
+              setActionStatus(msg);
+              setTimeout(() => setActionStatus(null), 4000);
+            }}
+          />
+        )}
+
+        {activeTab === 'analytics' && (
+          <BentoMarketplaceAnalytics
             actor={actor}
             onNotify={(msg) => {
               setActionStatus(msg);
