@@ -80,7 +80,7 @@ describe('Marketplace Growth, Retention & Seller Intelligence (Sprint 31)',()=>{
     `).run(admin.user_id,'2026-01-01T00:00:00.000Z','2026-01-01T00:00:00.000Z');
   });
 
-  function listing(args:{seller?:any;storeId?:string;title:string;categoryId?:string;productType?:string;price?:number;stock?:number}){
+  function listing(args:{seller?:any;storeId?:string;title:string;categoryId?:string;productType?:'PART'|'TYRE'|'ACCESSORY'|'CONSUMABLE'|'TOOL'|'ELECTRONICS'|'OTHER';price?:number;stock?:number}){
     counter++;const seller=args.seller||sellerA,storeId=args.storeId||storeA;
     const product=marketplaceService.createProduct(seller,storeId,{
       category_id:args.categoryId||'mcat_brakes',product_type:args.productType||'PART',seller_sku:'GR-'+counter,title:args.title,
