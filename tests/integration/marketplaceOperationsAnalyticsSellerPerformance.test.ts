@@ -63,7 +63,7 @@ describe('Marketplace Operations Analytics & Seller Performance (Sprint 30)',()=
     mem.run('mem_'+sellerB.user_id,sellerB.user_id,orgB,'2026-11-01T00:00:00.000Z','2026-11-01T00:00:00.000Z','2026-11-01T00:00:00.000Z');
 
     db.prepare(`
-      INSERT INTO user_platform_roles (user_id,role,granted_by,granted_at)
+      INSERT INTO user_platform_roles (user_id,role,assigned_by,assigned_at)
       VALUES (?,?,?,?)
     `).run(admin.user_id,PlatformRole.PLATFORM_ADMIN,admin.user_id,'2026-11-01T00:00:00.000Z');
 
