@@ -63,7 +63,7 @@ export class MarketplaceAnalyticsRepository{
     const buyerCounts=new Map<string,number>();
     for(const r of capturedRows)buyerCounts.set(String(r.buyer_user_id),(buyerCounts.get(String(r.buyer_user_id))||0)+1);
     return {
-      carts_created:carts.length,carts_checked_out:carts.filter(x=>x.status==='CHECKED_OUT'||[...cartIds].some(()=>false)).length,
+      carts_created:carts.length,carts_checked_out:carts.filter(x=>x.status==='CHECKED_OUT').length,
       orders_placed:orders.length,cancelled_pre_payment:orders.filter(x=>x.status==='CANCELLED'&&!capturedIds.has(String(x.id))).length,
       captured_orders:capturedIds.size,fulfillment_started:Number(fulfillStarted?.count||0),buyer_confirmed_completed:completedCaptured,
       distinct_paid_buyers:buyerCounts.size,repeat_paid_buyers:[...buyerCounts.values()].filter(x=>x>1).length,
