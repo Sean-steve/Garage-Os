@@ -64,8 +64,7 @@ export class MarketplaceGrowthRepository{
 
   retention(storeId:string|null,cohortRange:GrowthRange,observationTo:string):MarketplaceRetentionSummary{
     const captures=this.captures(storeId);
-    const byBuyer=new Map<string<string>,never>();
-    // TypeScript cannot infer grouped array mutation cleanly from SQL rows, so use an explicit map below.
+    // Group authoritative capture history by buyer for cohort maturity and repeat-purchase analysis.
     const grouped=new Map<string,CaptureRow[]>();
     for(const r of captures){
       const key=storeId?r.buyer_user_id:r.buyer_user_id;
@@ -129,21 +128,21 @@ export class MarketplaceGrowthRepository{
       GROUP BY c.code,o.currency
     `).all(range.to,range.from,range.to,...(storeId?[storeId]:[])) as any[];
 
-    const paidByCat=new Map<string,{orders:Set<string>;units:number;gross:Array<{currency:string;amount_minor:number}>}>();
+    const paidByCat=new Map<string,{orders:number;units:number;gross:Array<{currency:string;amount_minor:number}>}>();
     // SQL rows already aggregate orders by currency. Preserve per-currency money and sum order counts;
     // an order cannot mix currencies, so counts remain additive.
     for(const r of paidRows){
-      const current=paidByCat.get(String(r.category_code))||{orders:new Set<string>(),units:0,gross:[]};
+      const current=paidByCat.get(String(r.category_code))||{orders:0,units:0,gross:[]};
       current.units+=Number(r.captured_units||0);
       current.gross.push({currency:String(r.currency),amount_minor:Number(r.gross||0)});
-      for(let i=0;i<Number(r.captured_orders||0);i++)current.orders.add(String(r.currency)+':'+i);
+      current.orders+=Number(r.captured_orders||0);
       paidByCat.set(String(r.category_code),current);
     }
     return categoryRows.map(r=>{
       const paid=paidByCat.get(String(r.category_code));
       return {category_code:String(r.category_code),category_name:String(r.category_name),
         active_published_listings:Number(r.active_published_listings||0),current_saved_instances:Number(r.current_saved_instances||0),
-        captured_orders:paid?.orders.size||0,captured_units:paid?.units||0,captured_gross:paid?.gross.sort((a,b)=>a.currency.localeCompare(b.currency))||[],
+        captured_orders:paid?.orders||0,captured_units:paid?.units||0,captured_gross:paid?.gross.sort((a,b)=>a.currency.localeCompare(b.currency))||[],
         out_of_stock_saved_instances:Number(r.out_of_stock_saved_instances||0)};
     }).sort((a,b)=>b.captured_units-a.captured_units||b.current_saved_instances-a.current_saved_instances||a.category_name.localeCompare(b.category_name));
   }
