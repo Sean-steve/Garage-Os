@@ -5775,6 +5775,170 @@ export const MIGRATIONS: Migration[] = [
       `);
     },
   }
+
+  {
+    id: '031_marketplace_seller_payouts_balances',
+    name: 'Marketplace Seller Payouts, Balances & Financial Operations (Sprint 32)',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS marketplace_payout_providers (
+          id TEXT PRIMARY KEY,
+          provider_key TEXT UNIQUE NOT NULL,
+          display_name TEXT NOT NULL,
+          mode TEXT NOT NULL,
+          status TEXT NOT NULL,
+          webhook_secret_env TEXT NOT NULL,
+          supports_reversals INTEGER NOT NULL DEFAULT 0,
+          created_by TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          CHECK (mode IN ('TEST','LIVE')),
+          CHECK (status IN ('ACTIVE','PAUSED','RETIRED')),
+          CHECK (supports_reversals IN (0,1))
+        );
+
+        CREATE TABLE IF NOT EXISTS marketplace_payout_policies (
+          id TEXT PRIMARY KEY,
+          provider_id TEXT NOT NULL REFERENCES marketplace_payout_providers(id) ON DELETE RESTRICT,
+          currency TEXT NOT NULL,
+          minimum_payout_minor INTEGER NOT NULL DEFAULT 1,
+          reserve_minor INTEGER NOT NULL DEFAULT 0,
+          updated_by TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          UNIQUE(provider_id,currency),
+          CHECK (length(currency)=3),
+          CHECK (minimum_payout_minor > 0),
+          CHECK (reserve_minor >= 0)
+        );
+
+        CREATE TABLE IF NOT EXISTS marketplace_payout_accounts (
+          id TEXT PRIMARY KEY,
+          store_id TEXT NOT NULL REFERENCES marketplace_stores(id) ON DELETE RESTRICT,
+          provider_id TEXT NOT NULL REFERENCES marketplace_payout_providers(id) ON DELETE RESTRICT,
+          currency TEXT NOT NULL,
+          provider_account_ref TEXT NOT NULL,
+          account_label TEXT NOT NULL,
+          status TEXT NOT NULL,
+          registered_by TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          registered_at TEXT NOT NULL,
+          activated_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+          activated_at TEXT,
+          updated_at TEXT NOT NULL,
+          UNIQUE(store_id,provider_id,currency),
+          CHECK (length(currency)=3),
+          CHECK (status IN ('PENDING_REVIEW','ACTIVE','PAUSED','RETIRED')),
+          CHECK (
+            (status='ACTIVE' AND activated_by IS NOT NULL AND activated_at IS NOT NULL)
+            OR status!='ACTIVE'
+          )
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_payout_accounts_store
+          ON marketplace_payout_accounts(store_id,status,currency);
+
+        CREATE TABLE IF NOT EXISTS marketplace_payouts (
+          id TEXT PRIMARY KEY,
+          payout_number TEXT UNIQUE NOT NULL,
+          store_id TEXT NOT NULL REFERENCES marketplace_stores(id) ON DELETE RESTRICT,
+          payout_account_id TEXT NOT NULL REFERENCES marketplace_payout_accounts(id) ON DELETE RESTRICT,
+          provider_id TEXT NOT NULL REFERENCES marketplace_payout_providers(id) ON DELETE RESTRICT,
+          idempotency_key TEXT NOT NULL,
+          provider_payout_id TEXT,
+          amount_minor INTEGER NOT NULL,
+          currency TEXT NOT NULL,
+          status TEXT NOT NULL,
+          failure_code TEXT,
+          failure_message TEXT,
+          requested_by TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          requested_at TEXT NOT NULL,
+          processing_at TEXT,
+          succeeded_at TEXT,
+          failed_at TEXT,
+          reversed_at TEXT,
+          updated_at TEXT NOT NULL,
+          UNIQUE(store_id,idempotency_key),
+          UNIQUE(provider_id,provider_payout_id),
+          CHECK (amount_minor > 0),
+          CHECK (length(currency)=3),
+          CHECK (status IN ('REQUESTED','PROCESSING','SUCCEEDED','FAILED','REVERSED'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_payouts_store
+          ON marketplace_payouts(store_id,currency,status,requested_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_marketplace_payouts_provider
+          ON marketplace_payouts(provider_id,status,requested_at DESC);
+
+        CREATE TABLE IF NOT EXISTS marketplace_payout_batches (
+          id TEXT PRIMARY KEY,
+          batch_number TEXT UNIQUE NOT NULL,
+          provider_id TEXT NOT NULL REFERENCES marketplace_payout_providers(id) ON DELETE RESTRICT,
+          currency TEXT NOT NULL,
+          status TEXT NOT NULL,
+          created_by TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          created_at TEXT NOT NULL,
+          handoff_at TEXT,
+          updated_at TEXT NOT NULL,
+          CHECK (length(currency)=3),
+          CHECK (status IN ('DRAFT','HANDOFF_INITIATED','SETTLED','ATTENTION'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_payout_batches_provider
+          ON marketplace_payout_batches(provider_id,status,created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS marketplace_payout_batch_items (
+          batch_id TEXT NOT NULL REFERENCES marketplace_payout_batches(id) ON DELETE CASCADE,
+          payout_id TEXT UNIQUE NOT NULL REFERENCES marketplace_payouts(id) ON DELETE RESTRICT,
+          created_at TEXT NOT NULL,
+          PRIMARY KEY(batch_id,payout_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS marketplace_payout_provider_events (
+          id TEXT PRIMARY KEY,
+          provider_id TEXT NOT NULL REFERENCES marketplace_payout_providers(id) ON DELETE RESTRICT,
+          provider_event_id TEXT NOT NULL,
+          event_type TEXT NOT NULL,
+          payout_id TEXT REFERENCES marketplace_payouts(id) ON DELETE SET NULL,
+          signature_verified INTEGER NOT NULL,
+          payload_hash TEXT NOT NULL,
+          processing_status TEXT NOT NULL,
+          processing_message TEXT,
+          occurred_at TEXT NOT NULL,
+          processed_at TEXT NOT NULL,
+          UNIQUE(provider_id,provider_event_id),
+          CHECK (event_type IN ('PAYOUT_PROCESSING','PAYOUT_SUCCEEDED','PAYOUT_FAILED','PAYOUT_REVERSED')),
+          CHECK (signature_verified IN (0,1)),
+          CHECK (processing_status IN ('PROCESSED','IGNORED','REJECTED'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_payout_events_payout
+          ON marketplace_payout_provider_events(payout_id,processed_at DESC);
+
+        CREATE TABLE IF NOT EXISTS marketplace_payout_reconciliation_issues (
+          id TEXT PRIMARY KEY,
+          provider_id TEXT NOT NULL REFERENCES marketplace_payout_providers(id) ON DELETE RESTRICT,
+          provider_event_id TEXT NOT NULL,
+          payout_id TEXT REFERENCES marketplace_payouts(id) ON DELETE SET NULL,
+          issue_type TEXT NOT NULL,
+          details TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'OPEN',
+          created_at TEXT NOT NULL,
+          resolved_at TEXT,
+          CHECK (status IN ('OPEN','RESOLVED'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_payout_reconciliation_status
+          ON marketplace_payout_reconciliation_issues(status,created_at DESC);
+      `);
+    },
+    down: (db) => {
+      db.exec(`
+        DROP TABLE IF EXISTS marketplace_payout_reconciliation_issues;
+        DROP TABLE IF EXISTS marketplace_payout_provider_events;
+        DROP TABLE IF EXISTS marketplace_payout_batch_items;
+        DROP TABLE IF EXISTS marketplace_payout_batches;
+        DROP TABLE IF EXISTS marketplace_payouts;
+        DROP TABLE IF EXISTS marketplace_payout_accounts;
+        DROP TABLE IF EXISTS marketplace_payout_policies;
+        DROP TABLE IF EXISTS marketplace_payout_providers;
+      `);
+    },
+  },
 ];
 
 /**
