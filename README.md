@@ -40,7 +40,7 @@ Implemented domains:
 - Read-only marketplace operations analytics, settlement-ledger seller performance and platform operations intelligence
 - Settlement-capture growth, maturity-aware repeat-purchase retention and deterministic privacy-safe seller intelligence
 
-The next marketplace sprint is **not yet canonically named**; reconcile the roadmap before assigning Sprint 32.
+The next marketplace sprint is **Sprint 32 — Seller Payouts, Balances & Financial Operations**. See [docs/MARKETPLACE_ROADMAP_SPRINT_32_ONWARD.md](docs/MARKETPLACE_ROADMAP_SPRINT_32_ONWARD.md).
 
 ## Architecture
 

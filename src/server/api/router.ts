@@ -171,7 +171,7 @@ apiV1Router.get('/platform/capabilities', (req: Request, res: Response) => {
     lifecycle_state: PlatformLifecycleState.ACTIVE,
     architecture_baseline: 'GAR-000-to-GAR-051',
     active_sprint: 'Sprint 31: Marketplace Growth, Retention & Seller Intelligence',
-    next_sprint: 'TBD: next marketplace roadmap phase',
+    next_sprint: 'Sprint 32: Seller Payouts, Balances & Financial Operations',
     constitutional_laws_enforced: 12,
     config: getSanitizedConfig(),
     domains: [
