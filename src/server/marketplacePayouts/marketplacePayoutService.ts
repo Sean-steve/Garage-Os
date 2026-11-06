@@ -259,7 +259,7 @@ export class MarketplacePayoutService{
     const provider=repo.getProvider(requiredText(input.provider_id,'provider_id',100));
     if(!provider||provider.status!=='ACTIVE')throw new CanonicalAppError(ErrorCode.BUSINESS_RULE_VIOLATION,'Payout provider is unavailable',409);
     const cur=currency(input.currency);
-    const ids=Array.isArray(input.payout_ids)?[...new Set(input.payout_ids.map((x:any)=>String(x)))]:[];
+    const ids:string[]=Array.isArray(input.payout_ids)?Array.from(new Set<string>(input.payout_ids.map((x:any)=>String(x)))):[];
     if(!ids.length||ids.length>100)throw new CanonicalAppError(ErrorCode.VALIDATION_ERROR,'payout_ids must contain 1-100 unique payouts',400);
     const payouts=ids.map(id=>repo.getPayout(id));
     if(payouts.some(p=>!p))throw new CanonicalAppError(ErrorCode.NOT_FOUND_OR_NOT_ACCESSIBLE,'One or more payouts were not found',404);
