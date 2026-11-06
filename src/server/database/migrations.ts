@@ -5774,7 +5774,7 @@ export const MIGRATIONS: Migration[] = [
         DROP TABLE IF EXISTS marketplace_saved_listings;
       `);
     },
-  }
+  },
 
   {
     id: '031_marketplace_seller_payouts_balances',
