@@ -175,7 +175,7 @@ export class MarketplacePayoutService{
     recordAuditEvent({actor_id:actor.user_id,actor_type:actorType(actor),action:'MARKETPLACE_PAYOUT_ACCOUNT_REVIEWED',
       resource_type:'marketplace_payout_account',resource_id:account.id,correlation_id:account.id,source:'MARKETPLACE_PAYOUT_API',
       before_state:{status:account.status},after_state:{status:next.status,provider_reference_redacted:true}});
-    return next;
+    return this.redactAccount(next);
   }
 
   sellerDashboard(actor:AuthenticatedActorContext,storeId:string){
@@ -248,7 +248,7 @@ export class MarketplacePayoutService{
   adminOverview(actor:AuthenticatedActorContext){
     this.requireFinanceRole(actor);
     return {
-      providers:repo.listProviders(),policies:repo.listPolicies(),accounts:repo.listAccounts(),payouts:repo.listPayouts(),
+      providers:repo.listProviders(),policies:repo.listPolicies(),accounts:repo.listAccounts().map(a=>this.redactAccount(a)),payouts:repo.listPayouts(),
       batches:repo.listBatches(),events:repo.listProviderEvents(),issues:repo.listReconciliationIssues(),
       truth:{provider_events_authoritative:true,receivable_is_not_payout:true,raw_secrets_exposed:false}
     };
