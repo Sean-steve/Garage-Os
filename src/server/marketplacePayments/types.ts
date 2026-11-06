@@ -104,8 +104,8 @@ export interface MarketplaceSettlementSummary{
   gross_captured_minor:number;
   refunds_minor:number;
   net_receivable_minor:number;
-  settled_minor:0;
-  payout_available:false;
+  settled_minor:number;
+  payout_available:boolean;
 }
 
 export interface ProviderWebhookInput{

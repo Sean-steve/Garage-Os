@@ -1649,3 +1649,120 @@ export const SPRINT_31_TRACEABILITY_MATRIX: TraceabilityItem[] = [
     notes: 'Seller intelligence uses commercial capture facts and aggregate explicit saved state only. Browsing/search history and hidden profiles are not used; seller access is tenant-scoped and platform aggregation is admin-only.',
   },
 ];
+
+
+/**
+ * Sprint 32 — Seller Payouts, Balances & Financial Operations
+ */
+export const SPRINT_32_TRACEABILITY_MATRIX: TraceabilityItem[] = [
+  {
+    requirement_id: 'GAR-DEV-S32',
+    source: 'Marketplace reconciled roadmap / Sprint 25 settlement boundary',
+    title: 'Seller Payouts, Balances & Financial Operations',
+    criticality: 'LAUNCH_CRITICAL',
+    status: 'VERIFIED',
+    implementation_refs: [
+      'src/server/marketplacePayouts/marketplacePayoutRepository.ts',
+      'src/server/marketplacePayouts/marketplacePayoutService.ts',
+      'src/server/marketplacePayouts/types.ts',
+      'src/server/marketplacePayouts/payoutProviderAdapter.ts',
+      'src/server/api/marketplacePayoutRouter.ts',
+    ],
+    schema_refs: [
+      'marketplace_payout_providers','marketplace_payout_policies','marketplace_payout_accounts','marketplace_payouts',
+      'marketplace_payout_batches','marketplace_payout_batch_items','marketplace_payout_provider_events',
+      'marketplace_payout_reconciliation_issues','marketplace_settlement_ledger_entries'
+    ],
+    api_event_refs: [
+      'GET /api/v1/marketplace/seller/stores/:storeId/payouts',
+      'POST /api/v1/marketplace/seller/stores/:storeId/payouts',
+      'POST /api/v1/marketplace/payouts/webhooks/:providerKey',
+      'marketplace.payout.requested','marketplace.payout.processing','marketplace.payout.succeeded',
+      'marketplace.payout.failed','marketplace.payout.reversed'
+    ],
+    ui_refs: ['src/client/components/BentoMarketplacePayouts.tsx'],
+    test_refs: ['tests/integration/marketplaceSellerPayoutsBalances.test.ts'],
+    ops_refs: ['.github/workflows/certification.yml'],
+    notes: 'Completes the seller transfer lifecycle without conflating settlement-ledger receivable with provider-confirmed payout.',
+  },
+  {
+    requirement_id: 'GAR-S32-PAYOUT-AUTHORITY',
+    source: 'GAR-000 external truth / Sprint 25 provider-authoritative finance boundary',
+    title: 'Only verified payout provider events can confirm money transfer',
+    criticality: 'LAUNCH_CRITICAL',
+    status: 'VERIFIED',
+    implementation_refs: ['src/server/marketplacePayouts/marketplacePayoutService.ts'],
+    schema_refs: ['marketplace_payouts','marketplace_payout_provider_events'],
+    api_event_refs: ['POST /api/v1/marketplace/payouts/webhooks/:providerKey'],
+    ui_refs: ['Payout status and truth disclosure'],
+    test_refs: ['tests/integration/marketplaceSellerPayoutsBalances.test.ts'],
+    ops_refs: [],
+    notes: 'Seller request and finance batch handoff never self-declare processing or success. Invalid signatures are rejected before provider event IDs are consumed.',
+  },
+  {
+    requirement_id: 'GAR-S32-BALANCE',
+    source: 'Sprint 25 settlement ledger / payout reserve policy',
+    title: 'Seller balance separates receivable, reserved, paid and deficit states by currency',
+    criticality: 'LAUNCH_CRITICAL',
+    status: 'VERIFIED',
+    implementation_refs: ['src/server/marketplacePayouts/marketplacePayoutRepository.ts','src/server/marketplacePayouts/marketplacePayoutService.ts'],
+    schema_refs: ['marketplace_settlement_ledger_entries','marketplace_payouts','marketplace_payout_policies'],
+    api_event_refs: ['GET /api/v1/marketplace/seller/stores/:storeId/payouts'],
+    ui_refs: ['Seller payout balance cards'],
+    test_refs: ['tests/integration/marketplaceSellerPayoutsBalances.test.ts'],
+    ops_refs: [],
+    notes: 'Requested/processing payouts reserve seller funds. Only SUCCEEDED payouts count as paid. Reversals restore availability. Currencies are never combined.',
+  },
+  {
+    requirement_id: 'GAR-S32-ACCOUNT-POLICY',
+    source: 'Marketplace seller tenancy / financial operations governance',
+    title: 'Payout account registration and minimum/reserve policy are governed',
+    criticality: 'REQUIRED',
+    status: 'VERIFIED',
+    implementation_refs: ['src/server/marketplacePayouts/marketplacePayoutService.ts'],
+    schema_refs: ['marketplace_payout_accounts','marketplace_payout_policies','marketplace_payout_providers'],
+    api_event_refs: [
+      'POST /api/v1/marketplace/seller/stores/:storeId/payout-accounts',
+      'PATCH /api/v1/marketplace/admin/payouts/accounts/:accountId',
+      'PUT /api/v1/marketplace/admin/payouts/providers/:providerId/policy'
+    ],
+    ui_refs: ['Seller payout account registration','Finance payout account review','Payout policy editor'],
+    test_refs: ['tests/integration/marketplaceSellerPayoutsBalances.test.ts'],
+    ops_refs: [],
+    notes: 'Seller registers only provider-issued references/tokens; finance activates the account. Raw phone/numeric bank account values are rejected as provider_account_ref.',
+  },
+  {
+    requirement_id: 'GAR-S32-BATCH-RECONCILIATION',
+    source: 'GAR-000 external integration truth and recovery',
+    title: 'Payout batching, handoff and reconciliation preserve provider truth',
+    criticality: 'REQUIRED',
+    status: 'VERIFIED',
+    implementation_refs: ['src/server/marketplacePayouts/payoutProviderAdapter.ts','src/server/marketplacePayouts/marketplacePayoutService.ts'],
+    schema_refs: ['marketplace_payout_batches','marketplace_payout_batch_items','marketplace_payout_reconciliation_issues'],
+    api_event_refs: [
+      'POST /api/v1/marketplace/admin/payouts/batches',
+      'POST /api/v1/marketplace/admin/payouts/batches/:batchId/handoff'
+    ],
+    ui_refs: ['Finance payout batch operations','Reconciliation queue'],
+    test_refs: ['tests/integration/marketplaceSellerPayoutsBalances.test.ts'],
+    ops_refs: [],
+    notes: 'Sprint 32 defines the payout adapter contract but does not fabricate a live outbound provider. Handoff remains explicit until Sprint 40 activates concrete production adapters.',
+  },
+  {
+    requirement_id: 'GAR-S32-SECURITY-TENANCY',
+    source: 'GAR-039/GAR-040 tenant isolation and secret handling',
+    title: 'Seller payouts are tenant-scoped and secrets remain outside marketplace data',
+    criticality: 'LAUNCH_CRITICAL',
+    status: 'VERIFIED',
+    implementation_refs: ['src/server/marketplacePayouts/marketplacePayoutService.ts'],
+    schema_refs: ['marketplace_payout_accounts','marketplace_payout_providers'],
+    api_event_refs: [
+      'GET /api/v1/marketplace/seller/stores/:storeId/payouts',
+      'GET /api/v1/marketplace/admin/payouts'
+    ],
+    ui_refs: ['Seller Payouts','Finance Ops'],
+    test_refs: ['tests/integration/marketplaceSellerPayoutsBalances.test.ts'],
+    ops_refs: ['audit_events'],
+    notes: 'Seller access is organization-scoped; finance operations require Platform Admin or Finance Operator. Only ENV variable names are persisted for webhook secrets.',
+  },
+];

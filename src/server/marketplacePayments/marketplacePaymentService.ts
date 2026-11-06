@@ -360,8 +360,10 @@ export class MarketplacePaymentService{
     if(!this.hasFinanceRole(actor)){
       assertAuthorized(actor,CanonicalPermission.MARKETPLACE_ORDERS_READ,{organizationId:String(store.organization_id)});
     }
-    return {summaries:repo.settlementSummary(storeId),entries:repo.listSettlementEntries(storeId),
-      truth:{payout_available:false,settlement_ledger_authoritative:true,bank_transfer_executed:false}};
+    const summaries=repo.settlementSummary(storeId);
+    return {summaries,entries:repo.listSettlementEntries(storeId),
+      truth:{payout_available:summaries.some(x=>x.payout_available),settlement_ledger_authoritative:true,
+        bank_transfer_executed:summaries.some(x=>x.settled_minor>0),receivable_is_payout:false,payout_domain:'SPRINT_32'}};
   }
 
   reconciliation(actor:AuthenticatedActorContext){

@@ -155,8 +155,25 @@ export class MarketplacePaymentRepository{
         COALESCE(SUM(amount_minor),0) net
       FROM marketplace_settlement_ledger_entries WHERE store_id=? GROUP BY currency ORDER BY currency
     `).all(storeId) as any[];
-    return rows.map(r=>({store_id:storeId,currency:String(r.currency),gross_captured_minor:Number(r.gross),
-      refunds_minor:Number(r.refunds),net_receivable_minor:Number(r.net),settled_minor:0 as const,payout_available:false as const}));
+    return rows.map(r=>{
+      const currency=String(r.currency),net=Number(r.net);
+      const paid=Number((getDatabase().prepare(
+        "SELECT COALESCE(SUM(amount_minor),0) total FROM marketplace_payouts WHERE store_id=? AND currency=? AND status='SUCCEEDED'"
+      ).get(storeId,currency) as any)?.total||0);
+      const reserved=Number((getDatabase().prepare(
+        "SELECT COALESCE(SUM(amount_minor),0) total FROM marketplace_payouts WHERE store_id=? AND currency=? AND status IN ('REQUESTED','PROCESSING')"
+      ).get(storeId,currency) as any)?.total||0);
+      const options=getDatabase().prepare(`
+        SELECT pol.minimum_payout_minor,pol.reserve_minor
+        FROM marketplace_payout_accounts a
+        JOIN marketplace_payout_providers p ON p.id=a.provider_id
+        JOIN marketplace_payout_policies pol ON pol.provider_id=a.provider_id AND pol.currency=a.currency
+        WHERE a.store_id=? AND a.currency=? AND a.status='ACTIVE' AND p.status='ACTIVE'
+      `).all(storeId,currency) as any[];
+      const payoutAvailable=options.some(o=>Math.max(0,net-paid-reserved-Number(o.reserve_minor||0))>=Number(o.minimum_payout_minor||1));
+      return {store_id:storeId,currency,gross_captured_minor:Number(r.gross),refunds_minor:Number(r.refunds),
+        net_receivable_minor:net,settled_minor:paid,payout_available:payoutAvailable};
+    });
   }
 
   createReconciliationIssue(v:{id:string;provider_id:string;provider_event_id:string;order_id:string|null;payment_intent_id:string|null;
