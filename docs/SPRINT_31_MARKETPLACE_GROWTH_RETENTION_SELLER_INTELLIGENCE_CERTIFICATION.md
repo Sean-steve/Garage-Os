@@ -286,4 +286,4 @@ A final exact-head certification is required after documentation and traceabilit
 
 ## Next
 
-The next marketplace sprint is **not yet canonically named in the repository**. The roadmap should be reconciled before assigning Sprint 32.
+The reconciled marketplace roadmap is documented in `docs/MARKETPLACE_ROADMAP_SPRINT_32_ONWARD.md`. The canonical next sprint is **Sprint 32 — Seller Payouts, Balances & Financial Operations**.
