@@ -1,4 +1,4 @@
-export type ActiveTab = 'overview' | 'fuel' | 'maintenance' | 'issues' | 'timeline' | 'passport' | 'bookings' | 'providers' | 'workshop' | 'roadside' | 'towing' | 'dispatch' | 'safety' | 'accidents' | 'care' | 'trips' | 'marketplace' | 'fitment' | 'orders' | 'payments' | 'fulfillment' | 'trust' | 'discovery' | 'engagement' | 'analytics' | 'growth' | 'queues' | 'flags' | 'audit' | 'traceability';
+export type ActiveTab = 'overview' | 'fuel' | 'maintenance' | 'issues' | 'timeline' | 'passport' | 'bookings' | 'providers' | 'workshop' | 'roadside' | 'towing' | 'dispatch' | 'safety' | 'accidents' | 'care' | 'trips' | 'marketplace' | 'fitment' | 'orders' | 'payments' | 'payouts' | 'fulfillment' | 'trust' | 'discovery' | 'engagement' | 'analytics' | 'growth' | 'queues' | 'flags' | 'audit' | 'traceability';
 
 export interface VehicleSummary {
   id: string;
