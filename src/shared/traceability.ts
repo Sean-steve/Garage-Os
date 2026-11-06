@@ -1660,7 +1660,7 @@ export const SPRINT_32_TRACEABILITY_MATRIX: TraceabilityItem[] = [
     source: 'Marketplace reconciled roadmap / Sprint 25 settlement boundary',
     title: 'Seller Payouts, Balances & Financial Operations',
     criticality: 'LAUNCH_CRITICAL',
-    status: 'IMPLEMENTED',
+    status: 'VERIFIED',
     implementation_refs: [
       'src/server/marketplacePayouts/marketplacePayoutRepository.ts',
       'src/server/marketplacePayouts/marketplacePayoutService.ts',
@@ -1690,7 +1690,7 @@ export const SPRINT_32_TRACEABILITY_MATRIX: TraceabilityItem[] = [
     source: 'GAR-000 external truth / Sprint 25 provider-authoritative finance boundary',
     title: 'Only verified payout provider events can confirm money transfer',
     criticality: 'LAUNCH_CRITICAL',
-    status: 'IMPLEMENTED',
+    status: 'VERIFIED',
     implementation_refs: ['src/server/marketplacePayouts/marketplacePayoutService.ts'],
     schema_refs: ['marketplace_payouts','marketplace_payout_provider_events'],
     api_event_refs: ['POST /api/v1/marketplace/payouts/webhooks/:providerKey'],
@@ -1704,7 +1704,7 @@ export const SPRINT_32_TRACEABILITY_MATRIX: TraceabilityItem[] = [
     source: 'Sprint 25 settlement ledger / payout reserve policy',
     title: 'Seller balance separates receivable, reserved, paid and deficit states by currency',
     criticality: 'LAUNCH_CRITICAL',
-    status: 'IMPLEMENTED',
+    status: 'VERIFIED',
     implementation_refs: ['src/server/marketplacePayouts/marketplacePayoutRepository.ts','src/server/marketplacePayouts/marketplacePayoutService.ts'],
     schema_refs: ['marketplace_settlement_ledger_entries','marketplace_payouts','marketplace_payout_policies'],
     api_event_refs: ['GET /api/v1/marketplace/seller/stores/:storeId/payouts'],
@@ -1718,7 +1718,7 @@ export const SPRINT_32_TRACEABILITY_MATRIX: TraceabilityItem[] = [
     source: 'Marketplace seller tenancy / financial operations governance',
     title: 'Payout account registration and minimum/reserve policy are governed',
     criticality: 'REQUIRED',
-    status: 'IMPLEMENTED',
+    status: 'VERIFIED',
     implementation_refs: ['src/server/marketplacePayouts/marketplacePayoutService.ts'],
     schema_refs: ['marketplace_payout_accounts','marketplace_payout_policies','marketplace_payout_providers'],
     api_event_refs: [
@@ -1736,7 +1736,7 @@ export const SPRINT_32_TRACEABILITY_MATRIX: TraceabilityItem[] = [
     source: 'GAR-000 external integration truth and recovery',
     title: 'Payout batching, handoff and reconciliation preserve provider truth',
     criticality: 'REQUIRED',
-    status: 'IMPLEMENTED',
+    status: 'VERIFIED',
     implementation_refs: ['src/server/marketplacePayouts/payoutProviderAdapter.ts','src/server/marketplacePayouts/marketplacePayoutService.ts'],
     schema_refs: ['marketplace_payout_batches','marketplace_payout_batch_items','marketplace_payout_reconciliation_issues'],
     api_event_refs: [
@@ -1753,7 +1753,7 @@ export const SPRINT_32_TRACEABILITY_MATRIX: TraceabilityItem[] = [
     source: 'GAR-039/GAR-040 tenant isolation and secret handling',
     title: 'Seller payouts are tenant-scoped and secrets remain outside marketplace data',
     criticality: 'LAUNCH_CRITICAL',
-    status: 'IMPLEMENTED',
+    status: 'VERIFIED',
     implementation_refs: ['src/server/marketplacePayouts/marketplacePayoutService.ts'],
     schema_refs: ['marketplace_payout_accounts','marketplace_payout_providers'],
     api_event_refs: [
