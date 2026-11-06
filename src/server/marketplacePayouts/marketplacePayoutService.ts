@@ -279,7 +279,7 @@ export class MarketplacePayoutService{
       enqueueOutboxEvent(createCanonicalEventEnvelope({
         type:'marketplace.payout.batch.created',producer:'garage-os-marketplace-payouts',correlation_id:created.id,
         subject_ids:{marketplace_payout_batch:created.id},actor_id:actor.user_id,actor_type:actorType(actor),
-        provenance_class:DataProvenanceClass.SYSTEM_DERIVED,
+        provenance_class:DataProvenanceClass.DERIVED_DETERMINISTIC,
         payload:{batch_id:created.id,provider_key:provider.provider_key,currency:cur,payout_count:ids.length}
       }),db);
       return created;
