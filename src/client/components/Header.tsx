@@ -2,7 +2,7 @@ import React from 'react';
 import {
   Activity, AlertTriangle, BookOpenCheck, Building2, Car, Clock, FileCheck,
   Fuel, Layers, LifeBuoy, ListTree, LogOut, Radio, ShieldCheck, Sliders,
-  Truck, Wrench, ShieldAlert, Navigation, Store, ShoppingCart, CreditCard, PackageCheck, MessageSquare, Sparkles, Bookmark, BarChart3, TrendingUp
+  Truck, Wrench, ShieldAlert, Navigation, Store, ShoppingCart, CreditCard, PackageCheck, MessageSquare, Sparkles, Bookmark, BarChart3, TrendingUp, WalletCards
 } from 'lucide-react';
 import { ActiveTab } from '../types';
 
@@ -44,6 +44,7 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'fitment', label: 'Fitment', icon: Car },
     { id: 'orders', label: 'Orders', icon: ShoppingCart },
     { id: 'payments', label: 'Payments', icon: CreditCard },
+    { id: 'payouts', label: 'Payouts', icon: WalletCards },
     { id: 'fulfillment', label: 'Fulfillment', icon: PackageCheck },
     { id: 'trust', label: 'Trust', icon: MessageSquare },
     { id: 'discovery', label: 'Discovery', icon: Sparkles },
@@ -72,7 +73,7 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold tracking-tight text-white">GARAGE_OS</h1>
               <span className="px-2 py-0.5 text-[9px] font-bold tracking-wider uppercase bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 rounded-full">
-                S31 • GROWTH & RETENTION
+                S32 • SELLER PAYOUTS
               </span>
             </div>
             <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mt-0.5">
