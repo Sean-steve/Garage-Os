@@ -60,7 +60,7 @@ function idempotency(value:unknown):string{
 }
 function providerAccountRef(value:unknown):string{
   const v=requiredText(value,'provider_account_ref',200);
-  if(/^[+]?[ds-]{6,}$/.test(v)){
+  if(/^[+]?[0-9 -]{6,}$/.test(v)){
     throw new CanonicalAppError(ErrorCode.VALIDATION_ERROR,'provider_account_ref must be a provider-issued token/reference, not a raw phone or numeric bank account',400);
   }
   return v;
