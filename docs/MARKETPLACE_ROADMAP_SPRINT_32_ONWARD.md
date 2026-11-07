@@ -58,6 +58,8 @@ Seller money is traceable from capture/refund ledger entries through an external
 
 # Sprint 33 — Buyer–Seller Messaging, Notifications & Seller CRM Foundation
 
+**Implementation status: COMPLETE & VERIFIED**
+
 ## Objective
 Add governed transactional communication and consent-aware seller relationship tooling without hidden behavioral profiling or spam.
 
@@ -362,6 +364,6 @@ Launch safely with limited exposure before general availability.
 
 ## Immediate next execution
 
-**Sprint 32 — Seller Payouts, Balances & Financial Operations**
+**Sprint 34 — Promotions, Coupons & Pricing Governance**
 
-This comes before CRM/growth automation because Sprint 25 deliberately stops at seller receivable. Closing the payout lifecycle is more fundamental to a functioning marketplace.
+Sprint 33 closes governed buyer–seller communication and the consent-aware CRM foundation. The next gap is deterministic promotion eligibility, immutable discount snapshots and explicit promotional labeling.

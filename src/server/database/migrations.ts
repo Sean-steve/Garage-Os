@@ -5939,6 +5939,183 @@ export const MIGRATIONS: Migration[] = [
       `);
     },
   },
+
+  {
+    id: '032_marketplace_messaging_notifications_crm',
+    name: 'Buyer–Seller Messaging, Notifications & Seller CRM Foundation (Sprint 33)',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS marketplace_conversations (
+          id TEXT PRIMARY KEY,
+          store_id TEXT NOT NULL REFERENCES marketplace_stores(id) ON DELETE RESTRICT,
+          buyer_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          context_type TEXT NOT NULL,
+          listing_id TEXT REFERENCES marketplace_listings(id) ON DELETE SET NULL,
+          order_id TEXT REFERENCES marketplace_orders(id) ON DELETE SET NULL,
+          return_id TEXT REFERENCES marketplace_returns(id) ON DELETE SET NULL,
+          dispute_id TEXT REFERENCES marketplace_disputes(id) ON DELETE SET NULL,
+          subject TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'OPEN',
+          created_by TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          last_message_at TEXT,
+          CHECK (context_type IN ('LISTING_INQUIRY','ORDER','RETURN','DISPUTE')),
+          CHECK (status IN ('OPEN','CLOSED')),
+          CHECK (
+            (context_type='LISTING_INQUIRY' AND listing_id IS NOT NULL AND order_id IS NULL AND return_id IS NULL AND dispute_id IS NULL)
+            OR (context_type='ORDER' AND listing_id IS NULL AND order_id IS NOT NULL AND return_id IS NULL AND dispute_id IS NULL)
+            OR (context_type='RETURN' AND listing_id IS NULL AND order_id IS NOT NULL AND return_id IS NOT NULL AND dispute_id IS NULL)
+            OR (context_type='DISPUTE' AND listing_id IS NULL AND order_id IS NOT NULL AND return_id IS NULL AND dispute_id IS NOT NULL)
+          )
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_conversations_buyer
+          ON marketplace_conversations(buyer_user_id,status,updated_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_marketplace_conversations_store
+          ON marketplace_conversations(store_id,status,updated_at DESC);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_marketplace_open_listing_conversation
+          ON marketplace_conversations(buyer_user_id,listing_id) WHERE context_type='LISTING_INQUIRY' AND status='OPEN';
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_marketplace_open_order_conversation
+          ON marketplace_conversations(buyer_user_id,order_id) WHERE context_type='ORDER' AND status='OPEN';
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_marketplace_open_return_conversation
+          ON marketplace_conversations(buyer_user_id,return_id) WHERE context_type='RETURN' AND status='OPEN';
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_marketplace_open_dispute_conversation
+          ON marketplace_conversations(buyer_user_id,dispute_id) WHERE context_type='DISPUTE' AND status='OPEN';
+
+        CREATE TABLE IF NOT EXISTS marketplace_messages (
+          id TEXT PRIMARY KEY,
+          conversation_id TEXT NOT NULL REFERENCES marketplace_conversations(id) ON DELETE CASCADE,
+          sender_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          sender_role TEXT NOT NULL,
+          classification TEXT NOT NULL,
+          body TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          CHECK (sender_role IN ('BUYER','SELLER')),
+          CHECK (classification IN ('TRANSACTIONAL','PROMOTIONAL'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_messages_conversation
+          ON marketplace_messages(conversation_id,created_at,id);
+
+        CREATE TABLE IF NOT EXISTS marketplace_communication_preferences (
+          user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+          transactional_email_requested INTEGER NOT NULL DEFAULT 0,
+          transactional_sms_requested INTEGER NOT NULL DEFAULT 0,
+          transactional_push_requested INTEGER NOT NULL DEFAULT 0,
+          promotional_in_app_enabled INTEGER NOT NULL DEFAULT 0,
+          promotional_email_opt_in INTEGER NOT NULL DEFAULT 0,
+          promotional_sms_opt_in INTEGER NOT NULL DEFAULT 0,
+          promotional_push_opt_in INTEGER NOT NULL DEFAULT 0,
+          quiet_hours_start TEXT,
+          quiet_hours_end TEXT,
+          timezone TEXT NOT NULL DEFAULT 'UTC',
+          updated_at TEXT NOT NULL,
+          CHECK (transactional_email_requested IN (0,1)),
+          CHECK (transactional_sms_requested IN (0,1)),
+          CHECK (transactional_push_requested IN (0,1)),
+          CHECK (promotional_in_app_enabled IN (0,1)),
+          CHECK (promotional_email_opt_in IN (0,1)),
+          CHECK (promotional_sms_opt_in IN (0,1)),
+          CHECK (promotional_push_opt_in IN (0,1)),
+          CHECK ((quiet_hours_start IS NULL AND quiet_hours_end IS NULL) OR (quiet_hours_start IS NOT NULL AND quiet_hours_end IS NOT NULL)),
+          CHECK (quiet_hours_start IS NULL OR quiet_hours_start GLOB '[0-2][0-9]:[0-5][0-9]'),
+          CHECK (quiet_hours_end IS NULL OR quiet_hours_end GLOB '[0-2][0-9]:[0-5][0-9]')
+        );
+
+        CREATE TABLE IF NOT EXISTS marketplace_notification_templates (
+          id TEXT PRIMARY KEY,
+          template_key TEXT UNIQUE NOT NULL,
+          classification TEXT NOT NULL,
+          title_template TEXT NOT NULL,
+          body_template TEXT NOT NULL,
+          allowed_channels_json TEXT NOT NULL DEFAULT '["IN_APP"]',
+          is_active INTEGER NOT NULL DEFAULT 1,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          CHECK (classification IN ('TRANSACTIONAL','PROMOTIONAL')),
+          CHECK (is_active IN (0,1))
+        );
+
+        CREATE TABLE IF NOT EXISTS marketplace_notifications (
+          id TEXT PRIMARY KEY,
+          recipient_type TEXT NOT NULL,
+          recipient_id TEXT NOT NULL,
+          conversation_id TEXT NOT NULL REFERENCES marketplace_conversations(id) ON DELETE CASCADE,
+          message_id TEXT NOT NULL REFERENCES marketplace_messages(id) ON DELETE CASCADE,
+          classification TEXT NOT NULL,
+          title TEXT NOT NULL,
+          body TEXT NOT NULL,
+          state TEXT NOT NULL DEFAULT 'UNREAD',
+          created_at TEXT NOT NULL,
+          read_at TEXT,
+          dismissed_at TEXT,
+          CHECK (recipient_type IN ('BUYER_USER','SELLER_STORE')),
+          CHECK (classification IN ('TRANSACTIONAL','PROMOTIONAL')),
+          CHECK (state IN ('UNREAD','READ','DISMISSED'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_notifications_recipient
+          ON marketplace_notifications(recipient_type,recipient_id,state,created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS marketplace_external_deliveries (
+          id TEXT PRIMARY KEY,
+          notification_id TEXT NOT NULL REFERENCES marketplace_notifications(id) ON DELETE CASCADE,
+          channel TEXT NOT NULL,
+          provider_key TEXT NOT NULL,
+          provider_message_id TEXT,
+          state TEXT NOT NULL,
+          attempt_count INTEGER NOT NULL DEFAULT 1,
+          attempted_at TEXT NOT NULL,
+          accepted_at TEXT,
+          delivered_at TEXT,
+          failed_at TEXT,
+          bounced_at TEXT,
+          failure_code TEXT,
+          failure_message TEXT,
+          updated_at TEXT NOT NULL,
+          CHECK (channel IN ('EMAIL','SMS','PUSH')),
+          CHECK (state IN ('ATTEMPTED','ACCEPTED','DELIVERED','FAILED','BOUNCED')),
+          CHECK (attempt_count >= 1),
+          UNIQUE(provider_key,provider_message_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_external_deliveries_notification
+          ON marketplace_external_deliveries(notification_id,state,attempted_at DESC);
+
+        CREATE TABLE IF NOT EXISTS marketplace_external_delivery_events (
+          id TEXT PRIMARY KEY,
+          provider_key TEXT NOT NULL,
+          provider_event_id TEXT NOT NULL,
+          delivery_id TEXT NOT NULL REFERENCES marketplace_external_deliveries(id) ON DELETE CASCADE,
+          event_state TEXT NOT NULL,
+          signature_verified INTEGER NOT NULL,
+          occurred_at TEXT NOT NULL,
+          processed_at TEXT NOT NULL,
+          UNIQUE(provider_key,provider_event_id),
+          CHECK (event_state IN ('DELIVERED','FAILED','BOUNCED')),
+          CHECK (signature_verified=1)
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_external_delivery_events_delivery
+          ON marketplace_external_delivery_events(delivery_id,processed_at DESC);
+
+        INSERT OR IGNORE INTO marketplace_notification_templates
+          (id,template_key,classification,title_template,body_template,allowed_channels_json,is_active,created_at,updated_at)
+        VALUES
+          ('mtemplate_conversation_message','MARKETPLACE_CONVERSATION_MESSAGE','TRANSACTIONAL',
+           'New marketplace message','{{message_preview}}','["IN_APP","EMAIL","SMS","PUSH"]',1,
+           '2026-11-07T00:00:00.000Z','2026-11-07T00:00:00.000Z');
+      `);
+    },
+    down: (db) => {
+      db.exec(`
+        DROP TABLE IF EXISTS marketplace_external_delivery_events;
+        DROP TABLE IF EXISTS marketplace_external_deliveries;
+        DROP TABLE IF EXISTS marketplace_notifications;
+        DROP TABLE IF EXISTS marketplace_notification_templates;
+        DROP TABLE IF EXISTS marketplace_communication_preferences;
+        DROP TABLE IF EXISTS marketplace_messages;
+        DROP TABLE IF EXISTS marketplace_conversations;
+      `);
+    },
+  },
+
 ];
 
 /**
