@@ -18,7 +18,7 @@ import { storageEngine } from '../storage/storageEngine';
 import { listAuditEvents, recordAuditEvent } from '../security/audit';
 import { featureFlagManager } from '../featureFlags/flags';
 import { metrics } from '../observability/metrics';
-import { SPRINT_1_TRACEABILITY_MATRIX, R1_SPRINT_1_TO_14_TRACEABILITY_MATRIX, SPRINT_15_TRACEABILITY_MATRIX, SPRINT_16_TRACEABILITY_MATRIX, SPRINT_17_TRACEABILITY_MATRIX, SPRINT_18_TRACEABILITY_MATRIX, SPRINT_19_TRACEABILITY_MATRIX, SPRINT_20_TRACEABILITY_MATRIX, SPRINT_21_TRACEABILITY_MATRIX, SPRINT_22_TRACEABILITY_MATRIX, SPRINT_23_TRACEABILITY_MATRIX, SPRINT_24_TRACEABILITY_MATRIX, SPRINT_25_TRACEABILITY_MATRIX, SPRINT_26_TRACEABILITY_MATRIX, SPRINT_27_TRACEABILITY_MATRIX, SPRINT_28_TRACEABILITY_MATRIX, SPRINT_29_TRACEABILITY_MATRIX, SPRINT_30_TRACEABILITY_MATRIX, SPRINT_31_TRACEABILITY_MATRIX, SPRINT_32_TRACEABILITY_MATRIX } from '../../shared/traceability';
+import { SPRINT_1_TRACEABILITY_MATRIX, R1_SPRINT_1_TO_14_TRACEABILITY_MATRIX, SPRINT_15_TRACEABILITY_MATRIX, SPRINT_16_TRACEABILITY_MATRIX, SPRINT_17_TRACEABILITY_MATRIX, SPRINT_18_TRACEABILITY_MATRIX, SPRINT_19_TRACEABILITY_MATRIX, SPRINT_20_TRACEABILITY_MATRIX, SPRINT_21_TRACEABILITY_MATRIX, SPRINT_22_TRACEABILITY_MATRIX, SPRINT_23_TRACEABILITY_MATRIX, SPRINT_24_TRACEABILITY_MATRIX, SPRINT_25_TRACEABILITY_MATRIX, SPRINT_26_TRACEABILITY_MATRIX, SPRINT_27_TRACEABILITY_MATRIX, SPRINT_28_TRACEABILITY_MATRIX, SPRINT_29_TRACEABILITY_MATRIX, SPRINT_30_TRACEABILITY_MATRIX, SPRINT_31_TRACEABILITY_MATRIX, SPRINT_32_TRACEABILITY_MATRIX, SPRINT_33_TRACEABILITY_MATRIX } from '../../shared/traceability';
 import { PlatformLifecycleState, CanonicalActorType } from '../../shared/types';
 import { CanonicalAppError, ErrorCode } from '../../shared/errors';
 import { DataProvenanceClass } from '../../shared/provenance';
@@ -54,6 +54,7 @@ import { marketplaceDiscoveryRouter } from './marketplaceDiscoveryRouter';
 import { marketplaceEngagementRouter } from './marketplaceEngagementRouter';
 import { marketplaceAnalyticsRouter } from './marketplaceAnalyticsRouter';
 import { marketplaceGrowthRouter } from './marketplaceGrowthRouter';
+import { marketplaceMessagingRouter } from './marketplaceMessagingRouter';
 
 export const apiV1Router = Router();
 
@@ -160,6 +161,9 @@ apiV1Router.use(marketplaceAnalyticsRouter);
 // Mount Sprint 31 Marketplace Growth, Retention & Seller Intelligence Router.
 apiV1Router.use(marketplaceGrowthRouter);
 
+// Mount Sprint 33 Buyer–Seller Messaging, Notifications & Seller CRM Foundation Router.
+apiV1Router.use(marketplaceMessagingRouter);
+
 // 1. Platform Capabilities (GAR-002 §8 /v1/platform/capabilities)
 apiV1Router.get('/platform/capabilities', (req: Request, res: Response) => {
   const dbHealth = checkDatabaseHealth();
@@ -171,12 +175,12 @@ apiV1Router.get('/platform/capabilities', (req: Request, res: Response) => {
 
   const capabilities = {
     platform_name: 'Garage OS',
-    version: '32.0.0-sprint32',
+    version: '33.0.0-sprint33',
     environment: process.env.NODE_ENV || 'development',
     lifecycle_state: PlatformLifecycleState.ACTIVE,
     architecture_baseline: 'GAR-000-to-GAR-051',
-    active_sprint: 'Sprint 32: Seller Payouts, Balances & Financial Operations',
-    next_sprint: 'Sprint 33: Buyer–Seller Messaging, Notifications & Seller CRM Foundation',
+    active_sprint: 'Sprint 33: Buyer–Seller Messaging, Notifications & Seller CRM Foundation',
+    next_sprint: 'Sprint 34: Promotions, Coupons & Pricing Governance',
     constitutional_laws_enforced: 12,
     config: getSanitizedConfig(),
     domains: [
@@ -209,6 +213,7 @@ apiV1Router.get('/platform/capabilities', (req: Request, res: Response) => {
       { id: 'GAR-021-ANALYTICS', title: 'Marketplace Operations Analytics & Seller Performance', status: 'ACTIVE_IMPLEMENTED_SPRINT_30', owner: 'Marketplace Analytics Domain' },
       { id: 'GAR-021-GROWTH', title: 'Marketplace Growth, Retention & Seller Intelligence', status: 'ACTIVE_IMPLEMENTED_SPRINT_31', owner: 'Marketplace Growth Intelligence Domain' },
       { id: 'GAR-021-PAYOUT', title: 'Seller Payouts, Balances & Financial Operations', status: 'ACTIVE_IMPLEMENTED_SPRINT_32', owner: 'Marketplace Payouts Domain' },
+      { id: 'GAR-021-COMMS', title: 'Buyer–Seller Messaging, Notifications & Seller CRM', status: 'ACTIVE_IMPLEMENTED_SPRINT_33', owner: 'Marketplace Communications Domain' },
     ],
     subsystems: {
       database: {
@@ -248,12 +253,12 @@ apiV1Router.get('/platform/capabilities', (req: Request, res: Response) => {
 
 // 2. Traceability Matrix (GAR-049 §8 /v1/admin/traceability)
 apiV1Router.get('/admin/traceability', authenticate(), requirePlatformAdmin, (req: Request, res: Response) => {
-  const matrix = [...SPRINT_1_TRACEABILITY_MATRIX, ...R1_SPRINT_1_TO_14_TRACEABILITY_MATRIX, ...SPRINT_15_TRACEABILITY_MATRIX, ...SPRINT_16_TRACEABILITY_MATRIX, ...SPRINT_17_TRACEABILITY_MATRIX, ...SPRINT_18_TRACEABILITY_MATRIX, ...SPRINT_19_TRACEABILITY_MATRIX, ...SPRINT_20_TRACEABILITY_MATRIX, ...SPRINT_21_TRACEABILITY_MATRIX, ...SPRINT_22_TRACEABILITY_MATRIX, ...SPRINT_23_TRACEABILITY_MATRIX, ...SPRINT_24_TRACEABILITY_MATRIX, ...SPRINT_25_TRACEABILITY_MATRIX, ...SPRINT_26_TRACEABILITY_MATRIX, ...SPRINT_27_TRACEABILITY_MATRIX, ...SPRINT_28_TRACEABILITY_MATRIX, ...SPRINT_29_TRACEABILITY_MATRIX, ...SPRINT_30_TRACEABILITY_MATRIX, ...SPRINT_31_TRACEABILITY_MATRIX, ...SPRINT_32_TRACEABILITY_MATRIX];
+  const matrix = [...SPRINT_1_TRACEABILITY_MATRIX, ...R1_SPRINT_1_TO_14_TRACEABILITY_MATRIX, ...SPRINT_15_TRACEABILITY_MATRIX, ...SPRINT_16_TRACEABILITY_MATRIX, ...SPRINT_17_TRACEABILITY_MATRIX, ...SPRINT_18_TRACEABILITY_MATRIX, ...SPRINT_19_TRACEABILITY_MATRIX, ...SPRINT_20_TRACEABILITY_MATRIX, ...SPRINT_21_TRACEABILITY_MATRIX, ...SPRINT_22_TRACEABILITY_MATRIX, ...SPRINT_23_TRACEABILITY_MATRIX, ...SPRINT_24_TRACEABILITY_MATRIX, ...SPRINT_25_TRACEABILITY_MATRIX, ...SPRINT_26_TRACEABILITY_MATRIX, ...SPRINT_27_TRACEABILITY_MATRIX, ...SPRINT_28_TRACEABILITY_MATRIX, ...SPRINT_29_TRACEABILITY_MATRIX, ...SPRINT_30_TRACEABILITY_MATRIX, ...SPRINT_31_TRACEABILITY_MATRIX, ...SPRINT_32_TRACEABILITY_MATRIX, ...SPRINT_33_TRACEABILITY_MATRIX];
   return res.canonicalSuccess({
     total_requirements: matrix.length,
     matrix,
     traceability: matrix,
-    certification_phase: 'R1+S15+S16+S17+S18+S19+S20+S21+S22+S23+S24+S25+S26+S27+S28+S29+S30+S31+S32',
+    certification_phase: 'R1+S15+S16+S17+S18+S19+S20+S21+S22+S23+S24+S25+S26+S27+S28+S29+S30+S31+S32+S33',
   });
 });
 

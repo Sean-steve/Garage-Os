@@ -1766,3 +1766,114 @@ export const SPRINT_32_TRACEABILITY_MATRIX: TraceabilityItem[] = [
     notes: 'Seller access is organization-scoped; finance operations require Platform Admin or Finance Operator. Only ENV variable names are persisted for webhook secrets.',
   },
 ];
+
+
+/**
+ * Sprint 33 — Buyer–Seller Messaging, Notifications & Seller CRM Foundation
+ */
+export const SPRINT_33_TRACEABILITY_MATRIX: TraceabilityItem[] = [
+  {
+    requirement_id: 'GAR-DEV-S33',
+    source: 'Marketplace reconciled roadmap / Sprint 29 engagement boundary',
+    title: 'Buyer–Seller Messaging, Notifications & Seller CRM Foundation',
+    criticality: 'LAUNCH_CRITICAL',
+    status: 'VERIFIED',
+    implementation_refs: [
+      'src/server/marketplaceMessaging/marketplaceMessagingRepository.ts',
+      'src/server/marketplaceMessaging/marketplaceMessagingService.ts',
+      'src/server/marketplaceMessaging/notificationAdapter.ts',
+      'src/server/api/marketplaceMessagingRouter.ts'
+    ],
+    schema_refs: [
+      'marketplace_conversations','marketplace_messages','marketplace_communication_preferences',
+      'marketplace_notification_templates','marketplace_notifications','marketplace_external_deliveries',
+      'marketplace_external_delivery_events'
+    ],
+    api_event_refs: [
+      'POST /api/v1/marketplace/communications/conversations',
+      'POST /api/v1/marketplace/communications/conversations/:conversationId/messages',
+      'GET /api/v1/marketplace/seller/stores/:storeId/crm',
+      'marketplace.communication.conversation.created','marketplace.communication.message.sent'
+    ],
+    ui_refs: ['src/client/components/BentoMarketplaceMessaging.tsx'],
+    test_refs: ['tests/integration/marketplaceBuyerSellerMessagingNotificationsCrm.test.ts'],
+    ops_refs: ['.github/workflows/certification.yml'],
+    notes: 'Adds governed direct messaging and relationship tooling while keeping channel request, provider attempt and provider-confirmed delivery as separate facts.',
+  },
+  {
+    requirement_id: 'GAR-S33-CONVERSATIONS',
+    source: 'Sprint 33 marketplace communication scope',
+    title: 'Buyer–seller conversations are context-bound and tenant-authorized',
+    criticality: 'LAUNCH_CRITICAL',
+    status: 'VERIFIED',
+    implementation_refs: ['src/server/marketplaceMessaging/marketplaceMessagingService.ts'],
+    schema_refs: ['marketplace_conversations','marketplace_messages'],
+    api_event_refs: [
+      'GET /api/v1/marketplace/communications/conversations',
+      'GET /api/v1/marketplace/seller/stores/:storeId/communications/conversations'
+    ],
+    ui_refs: ['Buyer inbox','Seller inbox'],
+    test_refs: ['tests/integration/marketplaceBuyerSellerMessagingNotificationsCrm.test.ts'],
+    ops_refs: ['audit_events'],
+    notes: 'Conversations bind to a listing inquiry, order, return or dispute. Seller access is organization-scoped and cross-tenant access is denied.',
+  },
+  {
+    requirement_id: 'GAR-S33-CONSENT',
+    source: 'Consent-aware seller relationship tooling / anti-spam boundary',
+    title: 'Transactional and promotional communication remain explicitly classified',
+    criticality: 'LAUNCH_CRITICAL',
+    status: 'VERIFIED',
+    implementation_refs: ['src/server/marketplaceMessaging/marketplaceMessagingService.ts'],
+    schema_refs: ['marketplace_communication_preferences','marketplace_messages'],
+    api_event_refs: ['PATCH /api/v1/marketplace/communications/preferences'],
+    ui_refs: ['Communication consent controls','Message classification selector'],
+    test_refs: ['tests/integration/marketplaceBuyerSellerMessagingNotificationsCrm.test.ts'],
+    ops_refs: [],
+    notes: 'Promotional seller messages require an existing transaction relationship plus explicit buyer opt-in and are blocked during configured quiet hours. No mass-outreach endpoint exists.',
+  },
+  {
+    requirement_id: 'GAR-S33-DELIVERY-TRUTH',
+    source: 'GAR-000 external truth / Sprint 33 notification adapter boundary',
+    title: 'Requested, attempted, accepted and delivered notification states are distinct',
+    criticality: 'LAUNCH_CRITICAL',
+    status: 'VERIFIED',
+    implementation_refs: ['src/server/marketplaceMessaging/notificationAdapter.ts','src/server/marketplaceMessaging/marketplaceMessagingService.ts'],
+    schema_refs: ['marketplace_notifications','marketplace_external_deliveries','marketplace_external_delivery_events'],
+    api_event_refs: ['GET /api/v1/marketplace/communications/adapters'],
+    ui_refs: ['External delivery truth disclosure'],
+    test_refs: ['tests/integration/marketplaceBuyerSellerMessagingNotificationsCrm.test.ts'],
+    ops_refs: [],
+    notes: 'No external attempt is recorded without a configured adapter. Only verified provider events can establish DELIVERED, FAILED or BOUNCED truth; live adapters remain Sprint 40 work.',
+  },
+  {
+    requirement_id: 'GAR-S33-CRM-PRIVACY',
+    source: 'GAR-039/GAR-040 privacy / Sprint 31 seller intelligence boundary',
+    title: 'Seller CRM is grounded in legitimate commercial relationships without hidden profiling',
+    criticality: 'REQUIRED',
+    status: 'VERIFIED',
+    implementation_refs: ['src/server/marketplaceMessaging/marketplaceMessagingRepository.ts','src/server/marketplaceMessaging/marketplaceMessagingService.ts'],
+    schema_refs: ['marketplace_orders','marketplace_conversations'],
+    api_event_refs: ['GET /api/v1/marketplace/seller/stores/:storeId/crm'],
+    ui_refs: ['Relationship CRM'],
+    test_refs: ['tests/integration/marketplaceBuyerSellerMessagingNotificationsCrm.test.ts'],
+    ops_refs: [],
+    notes: 'CRM exposes order and conversation facts only. It does not use browsing/search history, expose buyer contact details, create an opaque customer score, or automatically message Sprint 31 opportunities.',
+  },
+  {
+    requirement_id: 'GAR-S33-NOTIFICATIONS',
+    source: 'Sprint 33 transactional notification foundation',
+    title: 'In-app notification state is durable and recipient-scoped',
+    criticality: 'REQUIRED',
+    status: 'VERIFIED',
+    implementation_refs: ['src/server/marketplaceMessaging/marketplaceMessagingRepository.ts'],
+    schema_refs: ['marketplace_notification_templates','marketplace_notifications'],
+    api_event_refs: [
+      'GET /api/v1/marketplace/communications/notifications',
+      'GET /api/v1/marketplace/seller/stores/:storeId/communications/notifications'
+    ],
+    ui_refs: ['In-app notifications'],
+    test_refs: ['tests/integration/marketplaceBuyerSellerMessagingNotificationsCrm.test.ts'],
+    ops_refs: [],
+    notes: 'Read/dismiss state is controlled by the intended buyer or seller store tenant. Templates are configuration, not fabricated delivery evidence.',
+  },
+];
